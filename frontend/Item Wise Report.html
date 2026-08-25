@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Item Wise Report</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+h2 {
+  text-align: center;
+}
+select {
+  padding: 6px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  border: 1px solid #000;
+  padding: 6px;
+}
+th {
+  background: #f2f2f2;
+}
+.right { text-align: right; }
+.center { text-align: center; }
+.box {
+  border: 1px solid #000;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Item Wise Stock Report</h2>
+
+<div class="box">
+  <label>Select Item:
+    <select id="itemSelect" onchange="loadReport()">
+      <option value="">-- Select Item --</option>
+    </select>
+  </label>
+</div>
+
+<div class="box" id="summaryBox" style="display:none">
+  <b>Item:</b> <span id="itemName"></span><br>
+  <b>HSN:</b> <span id="hsn"></span><br>
+  <b>Unit:</b> <span id="unit"></span><br>
+  <b>GST %:</b> <span id="gst"></span><br><br>
+
+  <b>Total In:</b> <span id="inQty"></span><br>
+  <b>Total Out:</b> <span id="outQty"></span><br>
+  <b>Closing Stock:</b> <span id="closing"></span>
+</div>
+
+<table id="movementTable">
+  <tr>
+    <th>Date</th>
+    <th>Type</th>
+    <th>Voucher No</th>
+    <th>Qty In</th>
+    <th>Qty Out</th>
+    <th>Rate</th>
+  </tr>
+</table>
+
+<script>
+async function loadItems() {
+  const res = await fetch(API_BASE_URL + "/report/items");
+  const items = await res.json();
+
+  const select = document.getElementById("itemSelect");
+  items.forEach(i => {
+    const opt = document.createElement("option");
+    opt.value = i.id;
+    opt.textContent = i.item_name;
+    select.appendChild(opt);
+  });
+}
+
+async function loadReport() {
+  const id = document.getElementById("itemSelect").value;
+  if (!id) return;
+
+  const res = await fetch(API_BASE_URL + `/report/item/${id}`);
+  const data = await res.json();
+
+  const s = data.summary;
+  document.getElementById("summaryBox").style.display = "block";
+  itemName.textContent = s.item_name;
+  hsn.textContent = s.hsn || "-";
+  unit.textContent = s.unit;
+  gst.textContent = s.gst_rate;
+  inQty.textContent = s.total_in;
+  outQty.textContent = s.total_out;
+  closing.textContent = s.closing_stock;
+
+  const table = document.getElementById("movementTable");
+  table.innerHTML = `
+    <tr>
+      <th>Date</th>
+      <th>Type</th>
+      <th>Voucher No</th>
+      <th>Qty In</th>
+      <th>Qty Out</th>
+      <th>Rate</th>
+    </tr>
+  `;
+
+  data.movements.forEach(m => {
+    const r = table.insertRow();
+    r.innerHTML = `
+      <td>${m.date}</td>
+      <td>${m.voucher_type}</td>
+      <td>${m.voucher_no}</td>
+      <td class="right">${m.qty_in || ""}</td>
+      <td class="right">${m.qty_out || ""}</td>
+      <td class="right">${m.rate || ""}</td>
+    `;
+  });
+}
+
+loadItems();
+</script>
+
+</body>
+</html>
