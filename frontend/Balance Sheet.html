@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Balance Sheet</title>
+<style>
+body { font-family: "Times New Roman", serif; }
+h2 { text-align:center; }
+table { width:100%; border-collapse:collapse; }
+th, td { border:1px solid black; padding:6px; }
+.amount { text-align:right; }
+</style>
+</head>
+
+<body>
+
+<h2>Balance Sheet</h2>
+
+<table id="bsTable">
+<tr>
+  <th colspan="2">Assets</th>
+  <th colspan="2">Liabilities</th>
+</tr>
+<tr>
+  <th>Ledger</th><th>Amount</th>
+  <th>Ledger</th><th>Amount</th>
+</tr>
+</table>
+
+<script>
+Promise.all([
+  fetch(API_BASE_URL + "/ledger/all").then(r => r.json()),
+  fetch(API_BASE_URL + "/ledger/master").then(r => r.json())
+]).then(([entries, masters]) => {
+
+  /* Ledger → Nature map */
+  const natureMap = {};
+  masters.forEach(m => {
+    natureMap[m.ledger] = m.nature;
+  });
+
+  const assets = {};
+  const liabilities = {};
+
+  let totalIncome = 0;
+  let totalExpense = 0;
+
+  entries.forEach(e => {
+    const nature = natureMap[e.ledger];
+    const debit = Number(e.debit) || 0;
+    const credit = Number(e.credit) || 0;
+    const balance = debit - credit;
+
+    if (nature === "ASSET") {
+      assets[e.ledger] = (assets[e.ledger] || 0) + balance;
+    }
+
+    if (nature === "LIABILITY") {
+      liabilities[e.ledger] = (liabilities[e.ledger] || 0) + (-balance);
+    }
+
+    if (nature === "INCOME") {
+      totalIncome += credit - debit;
+    }
+
+    if (nature === "EXPENSE") {
+      totalExpense += debit - credit;
+    }
+  });
+
+  /* 🔑 CURRENT YEAR PROFIT / LOSS */
+  const profit = totalIncome - totalExpense;
+
+  if (profit > 0) {
+    liabilities["Current Year Profit"] = profit;
+  } else if (profit < 0) {
+    assets["Current Year Loss"] = Math.abs(profit);
+  }
+
+  const table = document.getElementById("bsTable");
+  const aKeys = Object.keys(assets);
+  const lKeys = Object.keys(liabilities);
+  const max = Math.max(aKeys.length, lKeys.length);
+
+  let totalA = 0, totalL = 0;
+
+  for (let i = 0; i < max; i++) {
+    const r = table.insertRow();
+
+    if (aKeys[i]) {
+      const v = assets[aKeys[i]];
+      totalA += v;
+      r.innerHTML += `<td>${aKeys[i]}</td><td class="amount">${v.toFixed(2)}</td>`;
+    } else {
+      r.innerHTML += "<td></td><td></td>";
+    }
+
+    if (lKeys[i]) {
+      const v = liabilities[lKeys[i]];
+      totalL += v;
+      r.innerHTML += `<td>${lKeys[i]}</td><td class="amount">${v.toFixed(2)}</td>`;
+    } else {
+      r.innerHTML += "<td></td><td></td>";
+    }
+  }
+
+  const t = table.insertRow();
+  t.innerHTML = `
+    <td><strong>Total</strong></td>
+    <td class="amount"><strong>${totalA.toFixed(2)}</strong></td>
+    <td><strong>Total</strong></td>
+    <td class="amount"><strong>${totalL.toFixed(2)}</strong></td>
+  `;
+});
+</script>
+
+</body>
+</html>
