@@ -1,0 +1,43 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<script src="config.js"></script>
+</head>
+<body>
+<h2>Item Master</h2>
+
+<input id="item_code" placeholder="Item Code">
+<input id="item_name" placeholder="Item Name">
+<input id="hsn" placeholder="HSN">
+<input id="unit" placeholder="Unit">
+<input id="gst_rate" placeholder="GST %" type="number">
+<input id="selling_price" placeholder="Selling Price" type="number">
+<input id="opening_qty" placeholder="Opening Qty" type="number">
+<input id="opening_rate" placeholder="Opening Rate" type="number">
+
+<button onclick="saveItem()">Save Item</button>
+
+<script>
+function saveItem() {
+  fetch(API_BASE_URL + "/item/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      item_code: item_code.value,
+      item_name: item_name.value,
+      hsn: hsn.value,
+      unit: unit.value,
+      gst_rate: Number(gst_rate.value),
+      selling_price: Number(selling_price.value),
+      opening_qty: Number(opening_qty.value),
+      opening_rate: Number(opening_rate.value)
+    })
+  })
+  .then(r => r.json())
+  .then(d => alert("Item saved"))
+  .catch(() => alert("Error"));
+}
+</script>
+</body>
+</html>
