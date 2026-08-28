@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>GST Details</title>
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+.payable {
+  color: #a60000;
+  font-weight: bold;
+}
+
+.refundable {
+  color: #006400;
+  font-weight: bold;
+}
+
+.summary-line {
+  font-size: 16px;
+  text-align: right;
+  margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="title">GST Details</div>
+
+<div class="section-box">
+  <div class="section-title">Select Month</div>
+
+  <label>Month:
+    <input type="month" id="monthPicker">
+  </label>
+
+  <button onclick="loadGstSummary()">Show Details</button>
+</div>
+
+<div class="section-box">
+  <div class="section-title">GST Breakup</div>
+
+  <table id="gstTable">
+    <tr>
+      <th>Tax Head</th>
+      <th>Output GST (Payable on Sales)</th>
+      <th>Input GST (Credit on Purchases)</th>
+      <th>Net Payable / (Refundable)</th>
+    </tr>
+  </table>
+
+  <div id="summaryLine" class="summary-line"></div>
+</div>
+
+<script>
+const monthPicker = document.getElementById("monthPicker");
+const gstTable = document.getElementById("gstTable");
+const summaryLine = document.getElementById("summaryLine");
+
+// Default to the current month
+(function setDefaultMonth() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  monthPicker.value = `${y}-${m}`;
+})();
+
+function fmt(n) {
+  const val = Number(n) || 0;
+  return (val < 0 ? "(" + Math.abs(val).toFixed(2) + ")" : val.toFixed(2));
+}
+
+function loadGstSummary() {
+  const month = monthPicker.value;
+  if (!month) {
+    alert("Please select a month");
+    return;
+  }
+
+  fetch(API_BASE_URL + `/report/gst-summary?month=${month}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      renderTable(data);
+    })
+    .catch(() => alert("Unable to load GST summary"));
+}
+
+function renderTable(data) {
+  const rows = [
+    { label: "IGST", output: data.output.igst, input: data.input.igst, net: data.net.igst },
+    { label: "CGST", output: data.output.cgst, input: data.input.cgst, net: data.net.cgst },
+    { label: "SGST", output: data.output.sgst, input: data.input.sgst, net: data.net.sgst }
+  ];
+
+  gstTable.innerHTML = `
+    <tr>
+      <th>Tax Head</th>
+      <th>Output GST (Payable on Sales)</th>
+      <th>Input GST (Credit on Purchases)</th>
+      <th>Net Payable / (Refundable)</th>
+    </tr>
+  `;
+
+  rows.forEach(r => {
+    const row = gstTable.insertRow();
+    const netClass = r.net >= 0 ? "payable" : "refundable";
+    row.innerHTML = `
+      <td>${r.label}</td>
+      <td class="amount">₹${fmt(r.output)}</td>
+      <td class="amount">₹${fmt(r.input)}</td>
+      <td class="amount ${netClass}">₹${fmt(r.net)}</td>
+    `;
+  });
+
+  const totalRow = gstTable.insertRow();
+  totalRow.style.fontWeight = "bold";
+  totalRow.innerHTML = `
+    <td>Total</td>
+    <td class="amount">₹${fmt(data.output.total)}</td>
+    <td class="amount">₹${fmt(data.input.total)}</td>
+    <td class="amount ${data.net.total >= 0 ? 'payable' : 'refundable'}">₹${fmt(data.net.total)}</td>
+  `;
+
+  if (data.net.total > 0) {
+    summaryLine.innerHTML = `<span class="payable">Net GST Payable for ${data.month}: ₹${fmt(data.net.total)}</span>`;
+  } else if (data.net.total < 0) {
+    summaryLine.innerHTML = `<span class="refundable">Net GST Refundable/Carried Forward for ${data.month}: ₹${fmt(Math.abs(data.net.total))}</span>`;
+  } else {
+    summaryLine.innerHTML = `Net GST for ${data.month}: ₹0.00`;
+  }
+}
+
+// Auto-load on page open
+loadGstSummary();
+</script>
+
+</body>
+</html>
