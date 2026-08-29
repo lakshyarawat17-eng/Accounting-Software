@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Clients</title>
+
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 720px; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.form-grid .full { grid-column: 1 / -1; }
+label { display: block; margin-top: 12px; font-size: 14px; }
+input, textarea { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; font-family: inherit; }
+textarea { resize: vertical; min-height: 50px; }
+button { margin-top: 15px; padding: 6px 14px; cursor: pointer; }
+.btn-row { text-align: right; }
+.btn-row button { margin-left: 8px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid black; padding: 6px; font-size: 13px; }
+th { background: #f2f2f2; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: #f0f0f0; }
+#formTitle { margin-top: 0; }
+#statusMsg { margin-top: 10px; font-size: 13px; color: #a00; }
+#searchBox { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2 id="formTitle">Add Client</h2>
+
+  <div class="form-grid">
+    <label class="full">
+      Client / Company Name *
+      <input type="text" id="clientName" autocomplete="off">
+    </label>
+
+    <label>
+      Email
+      <input type="email" id="clientEmail" autocomplete="off">
+    </label>
+
+    <label>
+      Phone (with country code)
+      <input type="text" id="clientPhone" placeholder="+91XXXXXXXXXX" autocomplete="off">
+    </label>
+
+    <label class="full">
+      Address
+      <textarea id="clientAddress"></textarea>
+    </label>
+
+    <label>
+      GSTIN / Tax ID
+      <input type="text" id="clientGstin" autocomplete="off">
+    </label>
+
+    <label class="full">
+      Notes
+      <textarea id="clientNotes"></textarea>
+    </label>
+  </div>
+
+  <div id="statusMsg"></div>
+
+  <div class="btn-row">
+    <button id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">Cancel Edit</button>
+    <button id="saveBtn" onclick="saveClient()">Save Client</button>
+  </div>
+
+  <hr style="margin-top:25px;">
+
+  <label>
+    Search Clients
+    <input type="text" id="searchBox" placeholder="Type a name to filter…">
+  </label>
+
+  <table id="clientsTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>GSTIN</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let allClients = [];
+let editingId = null;
+
+/* ---------------- LOAD CLIENTS ---------------- */
+async function loadClients() {
+  try {
+    const res = await fetch(API_BASE_URL + "/clients");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    allClients = await res.json();
+    renderTable(allClients);
+  } catch (err) {
+    console.error("CLIENT LOAD ERROR:", err);
+    document.querySelector("#clientsTable tbody").innerHTML =
+      `<tr><td colspan="4">Failed to load clients</td></tr>`;
+  }
+}
+
+function renderTable(rows) {
+  const tbody = document.querySelector("#clientsTable tbody");
+  tbody.innerHTML = "";
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4">No clients yet</td></tr>`;
+    return;
+  }
+
+  rows.forEach(c => {
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.innerHTML = `
+      <td>${c.name}</td>
+      <td>${c.email || ""}</td>
+      <td>${c.phone || ""}</td>
+      <td>${c.gstin || ""}</td>
+    `;
+    tr.onclick = () => startEdit(c);
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------------- SEARCH / FILTER ---------------- */
+document.getElementById("searchBox").addEventListener("input", () => {
+  const q = document.getElementById("searchBox").value.trim().toLowerCase();
+  if (!q) return renderTable(allClients);
+  renderTable(allClients.filter(c => c.name.toLowerCase().includes(q)));
+});
+
+/* ---------------- EDIT MODE ---------------- */
+function startEdit(c) {
+  editingId = c.id;
+  document.getElementById("formTitle").textContent = "Edit Client";
+  document.getElementById("clientName").value = c.name || "";
+  document.getElementById("clientEmail").value = c.email || "";
+  document.getElementById("clientPhone").value = c.phone || "";
+  document.getElementById("clientAddress").value = c.address || "";
+  document.getElementById("clientGstin").value = c.gstin || "";
+  document.getElementById("clientNotes").value = c.notes || "";
+  document.getElementById("saveBtn").textContent = "Update Client";
+  document.getElementById("cancelEditBtn").style.display = "inline-block";
+  document.getElementById("statusMsg").textContent = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById("formTitle").textContent = "Add Client";
+  document.getElementById("clientName").value = "";
+  document.getElementById("clientEmail").value = "";
+  document.getElementById("clientPhone").value = "";
+  document.getElementById("clientAddress").value = "";
+  document.getElementById("clientGstin").value = "";
+  document.getElementById("clientNotes").value = "";
+  document.getElementById("saveBtn").textContent = "Save Client";
+  document.getElementById("cancelEditBtn").style.display = "none";
+  document.getElementById("statusMsg").textContent = "";
+}
+
+/* ---------------- SAVE / UPDATE ---------------- */
+async function saveClient() {
+  const gstinRaw = document.getElementById("clientGstin").value.trim().toUpperCase();
+  document.getElementById("clientGstin").value = gstinRaw;
+
+  const payload = {
+    name: document.getElementById("clientName").value.trim(),
+    email: document.getElementById("clientEmail").value.trim(),
+    phone: document.getElementById("clientPhone").value.trim(),
+    address: document.getElementById("clientAddress").value.trim(),
+    gstin: gstinRaw,
+    notes: document.getElementById("clientNotes").value.trim()
+  };
+
+  if (!payload.name) {
+    document.getElementById("statusMsg").textContent = "Client name is required";
+    return;
+  }
+
+  // Quick client-side shape check for faster feedback — the backend
+  // re-validates this regardless, so it's still enforced either way.
+  const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  if (payload.gstin && !GSTIN_PATTERN.test(payload.gstin)) {
+    document.getElementById("statusMsg").textContent =
+      "That doesn't look like a valid 15-character GSTIN (e.g. 27ABCDE1234F1Z5). Leave blank if this client isn't GST-registered.";
+    return;
+  }
+
+  const url = editingId
+    ? API_BASE_URL + "/clients/" + editingId
+    : API_BASE_URL + "/clients/create";
+  const method = editingId ? "PUT" : "POST";
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || "Save failed");
+
+    cancelEdit();
+    loadClients();
+  } catch (err) {
+    console.error("SAVE CLIENT ERROR:", err);
+    document.getElementById("statusMsg").textContent = err.message;
+  }
+}
+
+/* ---------------- INIT ---------------- */
+window.addEventListener("DOMContentLoaded", loadClients);
+</script>
+
+</body>
+</html>
