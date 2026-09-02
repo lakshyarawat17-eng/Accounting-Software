@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Goods Receipt</title>
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+.qty-input {
+  width: 80px;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+</style>
+</head>
+
+<body>
+
+<a class="back-link" href="Purchase Order Register.html">⬅ Purchase Order Register</a>
+<div class="title">Goods Receipt (GRN)</div>
+
+<!-- PO PICKER (shown when no po_id in URL) -->
+<div class="section-box" id="pickerBox" style="display:none;">
+  <div class="section-title">Select Purchase Order</div>
+  <select id="poPicker" style="width:400px;"></select>
+  <button onclick="loadSelectedPO()">Load</button>
+</div>
+
+<!-- PO HEADER -->
+<div class="section-box" id="headerBox" style="display:none;">
+  <div class="section-title">Order Details</div>
+  <label>PO No: <b id="poNoLabel"></b></label>
+  <label>Supplier: <b id="supplierLabel"></b></label>
+  <label>Order Date: <b id="poDateLabel"></b></label>
+  <br><br>
+  <label>Receipt Date:
+    <input type="date" id="receiptDate">
+  </label>
+  <label>Receive Into:
+    <select id="receiveLocation"></select>
+  </label>
+</div>
+
+<!-- ITEMS -->
+<div class="section-box" id="itemsBox" style="display:none;">
+  <div class="section-title">Items Pending Receipt</div>
+
+  <table id="itemsTable">
+    <tr>
+      <th>Item</th>
+      <th>Ordered</th>
+      <th>Already Received</th>
+      <th>Pending</th>
+      <th>Receive Now</th>
+    </tr>
+  </table>
+
+  <div style="margin-top:12px;">
+    <button onclick="submitReceipt()">✅ Confirm Receipt</button>
+  </div>
+</div>
+
+<div id="emptyMsg" class="empty" style="display:none;"></div>
+
+<script>
+let currentPO = null;
+
+const params = new URLSearchParams(window.location.search);
+const poIdFromUrl = params.get("po_id");
+
+// Locations dropdown for the "receive into" location — mirrors the pattern
+// in Item Wise Report.html. Defaults to "RM Store" to match the backend's
+// own default (resolveLocationId fallback in /po/receive), so a GRN saved
+// without ever touching the dropdown still lands in the same place it did
+// before this control existed.
+async function loadLocations() {
+  const res = await fetch(API_BASE_URL + "/locations?active=1");
+  const locations = await res.json();
+
+  const select = document.getElementById("receiveLocation");
+  select.innerHTML = locations.map(l => `<option value="${l.id}">${l.location_name}</option>`).join("");
+
+  const rmStore = locations.find(l => l.location_name === "RM Store");
+  if (rmStore) select.value = rmStore.id;
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("receiptDate").value = new Date().toISOString().slice(0, 10);
+  await loadLocations();
+
+  if (poIdFromUrl) {
+    loadPO(poIdFromUrl);
+  } else {
+    await populatePicker();
+  }
+});
+
+async function populatePicker() {
+  const res = await fetch(API_BASE_URL + "/po/list");
+  const list = await res.json();
+  const receivable = list.filter(po => ["OPEN", "PARTIALLY_RECEIVED"].includes(po.status));
+
+  if (!receivable.length) {
+    document.getElementById("emptyMsg").style.display = "block";
+    document.getElementById("emptyMsg").textContent = "No purchase orders are pending receipt.";
+    return;
+  }
+
+  const picker = document.getElementById("poPicker");
+  picker.innerHTML = receivable
+    .map(po => `<option value="${po.id}">${po.po_no} — ${po.supplier} (₹${po.grand_total.toFixed(2)})</option>`)
+    .join("");
+
+  document.getElementById("pickerBox").style.display = "block";
+}
+
+function loadSelectedPO() {
+  const id = document.getElementById("poPicker").value;
+  loadPO(id);
+}
+
+async function loadPO(id) {
+  const res = await fetch(API_BASE_URL + `/po/${id}`);
+  const po = await res.json();
+
+  if (po.error) {
+    document.getElementById("emptyMsg").style.display = "block";
+    document.getElementById("emptyMsg").textContent = po.error;
+    return;
+  }
+
+  if (po.status === "CANCELLED") {
+    document.getElementById("emptyMsg").style.display = "block";
+    document.getElementById("emptyMsg").textContent = "This purchase order has been cancelled.";
+    return;
+  }
+
+  currentPO = po;
+
+  document.getElementById("pickerBox").style.display = "none";
+  document.getElementById("headerBox").style.display = "block";
+  document.getElementById("itemsBox").style.display = "block";
+
+  document.getElementById("poNoLabel").textContent = po.po_no;
+  document.getElementById("supplierLabel").textContent = po.supplier;
+  document.getElementById("poDateLabel").textContent = po.date;
+
+  renderItems();
+}
+
+function renderItems() {
+  const table = document.getElementById("itemsTable");
+  table.innerHTML = `
+    <tr>
+      <th>Item</th>
+      <th>Ordered</th>
+      <th>Already Received</th>
+      <th>Pending</th>
+      <th>Receive Now</th>
+    </tr>
+  `;
+
+  currentPO.items.forEach(item => {
+    const pending = item.qty - item.received_qty;
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${item.item_name}</td>
+      <td class="center">${item.qty}</td>
+      <td class="center">${item.received_qty}</td>
+      <td class="center">${pending}</td>
+      <td class="center">
+        <input type="number" class="qty-input" data-po-item-id="${item.id}"
+               data-pending="${pending}" min="0" max="${pending}"
+               step="any" value="${pending > 0 ? pending : 0}" ${pending <= 0 ? "disabled" : ""}>
+      </td>
+    `;
+  });
+}
+
+function submitReceipt() {
+  const date = document.getElementById("receiptDate").value;
+  if (!date) {
+    alert("Receipt date required");
+    return;
+  }
+
+  const inputs = document.querySelectorAll("#itemsTable input.qty-input");
+  const items = [];
+
+  for (const input of inputs) {
+    const qty = Number(input.value) || 0;
+    const pending = Number(input.dataset.pending);
+
+    if (qty < 0 || qty > pending + 1e-6) {
+      alert("Receive quantity cannot exceed the pending quantity");
+      return;
+    }
+    if (qty > 0) {
+      items.push({ po_item_id: Number(input.dataset.poItemId), qty });
+    }
+  }
+
+  if (!items.length) {
+    alert("Enter at least one quantity to receive");
+    return;
+  }
+
+  const locationId = document.getElementById("receiveLocation").value;
+
+  fetch(API_BASE_URL + "/po/receive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ po_id: currentPO.id, date, items, location_id: locationId || null })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+    alert("Goods receipt recorded successfully");
+    window.location.href = "Purchase Order Register.html";
+  })
+  .catch(() => alert("Error recording goods receipt"));
+}
+</script>
+
+</body>
+</html>

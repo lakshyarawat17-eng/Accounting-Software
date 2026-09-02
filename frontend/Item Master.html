@@ -1,0 +1,278 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<script src="config.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 14px; margin: 20px; }
+  label { display: inline-block; min-width: 110px; margin-top: 8px; }
+  input, select { padding: 5px; margin-top: 8px; }
+  .field-row { display: block; }
+  .hint { color: #666; font-size: 12px; margin-left: 112px; }
+  .error { color: #a60000; font-size: 12px; margin-left: 112px; display: none; }
+  button { margin-top: 16px; padding: 6px 16px; }
+  #missingHsnBox { margin-top: 24px; padding: 10px; border: 1px solid #a60000; display: none; }
+  #missingHsnBox.show { display: block; }
+  #missingHsnBox h3 { margin: 0 0 8px 0; color: #a60000; }
+  #missingHsnBox li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<h2>Item Master</h2>
+
+<div class="field-row">
+  <label>Item Code</label>
+  <input id="item_code" placeholder="Item Code">
+</div>
+
+<div class="field-row">
+  <label>Item Name</label>
+  <input id="item_name" placeholder="Item Name" required>
+</div>
+
+<div class="field-row">
+  <label>HSN/SAC *</label>
+  <input id="hsn" placeholder="e.g. 847130" maxlength="8">
+</div>
+<div class="hint" id="hsnHint">Numeric code, 4/6/8 digits. Required length depends on your turnover slab (set in Settings).</div>
+<div class="error" id="hsnError"></div>
+
+<div class="field-row">
+  <label>Unit (UQC) *</label>
+  <select id="unit" required>
+    <option value="">Select unit...</option>
+  </select>
+</div>
+<div class="hint">Must be a standard GST Unit Quantity Code — free-text units get rejected in GSTR-1.</div>
+
+<div class="field-row">
+  <label>Item Type</label>
+  <select id="item_type">
+    <option value="RAW_MATERIAL">Raw Material</option>
+    <option value="WIP">WIP (Semi-Finished)</option>
+    <option value="FINISHED_GOOD" selected>Finished Good</option>
+    <option value="CONSUMABLE">Consumable</option>
+    <option value="SCRAP">Scrap</option>
+  </select>
+</div>
+<div class="hint">What role this item plays in the business — purchased input, in-process, sellable end product, consumable, or scrap/waste.</div>
+
+<div class="field-row">
+  <label>Secondary Unit</label>
+  <select id="secondary_unit">
+    <option value="">None</option>
+  </select>
+  <input id="conversion_factor" placeholder="e.g. 12" type="number" step="any" style="width: 90px; margin-left: 8px;">
+</div>
+<div class="hint" id="conversionHint">Optional. Use this if you purchase/stock in a different unit than the primary one above — e.g. Unit = NOS, Secondary Unit = BOX, Conversion Factor = 12 means 1 BOX = 12 NOS. Leave both blank if not needed.</div>
+<div class="error" id="conversionError"></div>
+
+<div class="field-row">
+  <label>Supply Type</label>
+  <select id="supply_type">
+    <option value="TAXABLE" selected>Taxable</option>
+    <option value="EXEMPT">Exempt</option>
+    <option value="NIL_RATED">Nil Rated</option>
+    <option value="ZERO_RATED">Zero Rated (Export/SEZ under LUT)</option>
+  </select>
+</div>
+<div class="hint" id="supplyTypeHint">Default classification for this item. Exempt/Nil Rated always bill at 0% GST. Zero Rated (export) keeps a normal GST% here — it's zeroed only on invoices actually marked as export/SEZ.</div>
+
+<div class="field-row">
+  <label>GST %</label>
+  <input id="gst_rate" placeholder="GST %" type="number">
+</div>
+
+<div class="field-row">
+  <label>Selling Price</label>
+  <input id="selling_price" placeholder="Selling Price" type="number">
+</div>
+
+<div class="field-row">
+  <label>Opening Qty</label>
+  <input id="opening_qty" placeholder="Opening Qty" type="number">
+</div>
+
+<div class="field-row">
+  <label>Opening Rate</label>
+  <input id="opening_rate" placeholder="Opening Rate" type="number">
+</div>
+
+<button onclick="saveItem()">Save Item</button>
+
+<div id="missingHsnBox">
+  <h3>Items missing HSN/SAC</h3>
+  <div>These existing items have no HSN code and won't be compliant for filing:</div>
+  <ul id="missingHsnList"></ul>
+</div>
+
+<script>
+const hsnInput = document.getElementById("hsn");
+const hsnError = document.getElementById("hsnError");
+const unitSelect = document.getElementById("unit");
+const supplyTypeSelect = document.getElementById("supply_type");
+const gstRateInput = document.getElementById("gst_rate");
+const itemTypeSelect = document.getElementById("item_type");
+const secondaryUnitSelect = document.getElementById("secondary_unit");
+const conversionFactorInput = document.getElementById("conversion_factor");
+const conversionError = document.getElementById("conversionError");
+let gstRateBeforeDisable = null;
+
+// EXEMPT / NIL_RATED are always 0% by definition (mirrors the backend's
+// effectiveGstRate logic in /item/create and /item/:id) — so the GST %
+// field is locked to 0 for those. ZERO_RATED keeps its normal GST% here
+// since that's the item's domestic rate; it's only zeroed against a
+// specific invoice line marked ZERO_RATED (Step 3).
+function applySupplyTypeToGstField() {
+  const v = supplyTypeSelect.value;
+  const lockToZero = v === "EXEMPT" || v === "NIL_RATED";
+  if (lockToZero) {
+    if (gstRateBeforeDisable === null) gstRateBeforeDisable = gstRateInput.value;
+    gstRateInput.value = 0;
+    gstRateInput.disabled = true;
+  } else {
+    gstRateInput.disabled = false;
+    if (gstRateBeforeDisable !== null) {
+      gstRateInput.value = gstRateBeforeDisable;
+      gstRateBeforeDisable = null;
+    }
+  }
+}
+
+supplyTypeSelect.addEventListener("change", applySupplyTypeToGstField);
+
+// Populate the unit dropdown with the official UQC list from the backend
+// instead of letting free text in. The secondary-unit dropdown draws from
+// the same list, since it must also be a valid UQC (see validateUnitConversion
+// server-side).
+fetch(API_BASE_URL + "/reference/uqc")
+  .then(r => r.json())
+  .then(d => {
+    (d.uqc_codes || []).forEach(code => {
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = code;
+      unitSelect.appendChild(opt);
+
+      const opt2 = document.createElement("option");
+      opt2.value = code;
+      opt2.textContent = code;
+      secondaryUnitSelect.appendChild(opt2);
+    });
+  })
+  .catch(() => {});
+
+// Surface any existing items that are missing HSN so they can be fixed.
+fetch(API_BASE_URL + "/items/missing-hsn")
+  .then(r => r.json())
+  .then(rows => {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const box = document.getElementById("missingHsnBox");
+    const list = document.getElementById("missingHsnList");
+    rows.forEach(item => {
+      const li = document.createElement("li");
+      li.textContent = `${item.item_name} (${item.item_code || "no code"})`;
+      list.appendChild(li);
+    });
+    box.classList.add("show");
+  })
+  .catch(() => {});
+
+function clientSideHsnCheck(hsn) {
+  const trimmed = (hsn || "").trim();
+  if (!trimmed) return null; // required-ness is enforced server-side (depends on turnover)
+  if (!/^\d{4}$|^\d{6}$|^\d{8}$/.test(trimmed)) {
+    return "HSN/SAC must be numeric, 4, 6, or 8 digits.";
+  }
+  return null;
+}
+
+hsnInput.addEventListener("input", () => {
+  const msg = clientSideHsnCheck(hsnInput.value);
+  hsnError.style.display = msg ? "block" : "none";
+  hsnError.textContent = msg || "";
+});
+
+// Mirrors validateUnitConversion server-side: both fields optional, but if
+// either is filled in, both must be, and they must differ from the primary
+// unit. This is a client-side convenience check only — the backend is
+// still authoritative.
+function clientSideConversionCheck() {
+  const secondary = secondaryUnitSelect.value;
+  const factor = conversionFactorInput.value.trim();
+  const hasSecondary = secondary !== "";
+  const hasFactor = factor !== "";
+
+  if (!hasSecondary && !hasFactor) return null;
+  if (hasSecondary !== hasFactor) {
+    return "Secondary Unit and Conversion Factor must be supplied together, or both left blank.";
+  }
+  if (secondary === unitSelect.value) {
+    return "Secondary Unit must be different from the primary Unit.";
+  }
+  const factorNum = Number(factor);
+  if (!Number.isFinite(factorNum) || factorNum <= 0) {
+    return "Conversion Factor must be a positive number.";
+  }
+  return null;
+}
+
+function updateConversionError() {
+  const msg = clientSideConversionCheck();
+  conversionError.style.display = msg ? "block" : "none";
+  conversionError.textContent = msg || "";
+}
+
+secondaryUnitSelect.addEventListener("change", updateConversionError);
+conversionFactorInput.addEventListener("input", updateConversionError);
+
+function saveItem() {
+  const localErr = clientSideHsnCheck(hsnInput.value);
+  if (localErr) {
+    hsnError.style.display = "block";
+    hsnError.textContent = localErr;
+    return;
+  }
+  if (!unitSelect.value) {
+    alert("Please select a unit (UQC).");
+    return;
+  }
+  const conversionErr = clientSideConversionCheck();
+  if (conversionErr) {
+    conversionError.style.display = "block";
+    conversionError.textContent = conversionErr;
+    return;
+  }
+
+  fetch(API_BASE_URL + "/item/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      item_code: item_code.value,
+      item_name: item_name.value,
+      hsn: hsnInput.value,
+      unit: unitSelect.value,
+      gst_rate: Number(gst_rate.value),
+      selling_price: Number(selling_price.value),
+      opening_qty: Number(opening_qty.value),
+      opening_rate: Number(opening_rate.value),
+      supply_type: supplyTypeSelect.value,
+      item_type: itemTypeSelect.value,
+      secondary_unit: secondaryUnitSelect.value || null,
+      conversion_factor: conversionFactorInput.value ? Number(conversionFactorInput.value) : null
+    })
+  })
+  .then(async r => {
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Error saving item");
+    return d;
+  })
+  .then(() => {
+    alert("Item saved");
+    location.reload();
+  })
+  .catch(err => alert(err.message));
+}
+</script>
+</body>
+</html>
