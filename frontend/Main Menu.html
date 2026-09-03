@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Books of Accounts – Main Menu</title>
+
+<style>
+@page {
+  margin: 20mm;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: "Times New Roman", serif;
+  background-color: #f5f5f5;
+  margin: 0;
+  padding: 0;
+}
+
+/* Container */
+.container {
+  width: 1000px;
+  max-width: 96%;
+  margin: 40px auto;
+  background: white;
+  border: 1px solid #000;
+  padding: 30px 34px;
+}
+
+/* Heading */
+h1 {
+  text-align: center;
+  font-size: 24px;
+  margin: 0 0 4px 0;
+}
+
+h2 {
+  text-align: center;
+  font-size: 16px;
+  font-weight: normal;
+  margin: 0 0 22px 0;
+  color: #333;
+}
+
+/* Quick find */
+.quickfind {
+  margin: 0 auto 26px auto;
+  max-width: 420px;
+}
+
+.quickfind input {
+  width: 100%;
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  border: 1px solid #000;
+}
+
+.quickfind input:focus {
+  outline: 2px solid #444;
+  outline-offset: -1px;
+}
+
+#noResults {
+  display: none;
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 18px;
+}
+
+/* Low Stock Alerts widget (Scrap & Reorder Alerts, Step 9) — hidden
+   entirely until the /report/low-stock fetch resolves with at least one
+   qualifying item, same "don't clutter when there's nothing to show"
+   convention as the Item Wise Report's unassigned/unassigned_batch notes. */
+.lowstock-box {
+  border: 1px solid #b8860b;
+  background: #fff9e6;
+  padding: 12px 16px 14px 16px;
+  margin: 0 0 20px 0;
+}
+
+.lowstock-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #7a5b00;
+  margin-bottom: 8px;
+}
+
+.lowstock-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.lowstock-table th, .lowstock-table td {
+  text-align: left;
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid #e6d798;
+}
+
+.lowstock-table th {
+  font-weight: bold;
+  color: #7a5b00;
+}
+
+.lowstock-table tr:last-child td {
+  border-bottom: none;
+}
+
+.lowstock-table a {
+  color: #1a1a1a;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.lowstock-table a:hover {
+  text-decoration: underline;
+}
+
+.lowstock-balance {
+  color: #b30000;
+  font-weight: bold;
+}
+
+.lowstock-footnote {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #7a5b00;
+}
+
+/* Section grid — two compartments per row on a wide screen */
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 720px) {
+  .section-grid { grid-template-columns: 1fr; }
+}
+
+/* Each compartment */
+.compartment {
+  border: 1px solid #000;
+  padding: 14px 16px 16px 16px;
+}
+
+.compartment-title {
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #000;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.group-label {
+  font-size: 10.5px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 10px 0 5px 0;
+}
+
+.group-label:first-of-type {
+  margin-top: 0;
+}
+
+/* "New ___" primary actions — small pill-style buttons */
+.new-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.new-actions a {
+  display: inline-block;
+  text-decoration: none;
+  color: black;
+  border: 1px solid black;
+  background: #f2f2f2;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.new-actions a:hover {
+  background: #333;
+  color: white;
+}
+
+/* Registers / masters / reports — plain link list */
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.link-list a {
+  text-decoration: none;
+  color: #1a1a1a;
+  font-size: 13.5px;
+  padding: 3px 2px;
+  border-bottom: 1px dotted transparent;
+}
+
+.link-list a:hover {
+  border-bottom: 1px dotted #000;
+}
+
+/* Single-item compartment (e.g. Settings) rendered without sub-groups */
+.compartment.single a {
+  display: block;
+  text-decoration: none;
+  color: black;
+  border: 1px solid black;
+  padding: 14px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.compartment.single a:hover {
+  background: #eaeaea;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  margin-top: 30px;
+  font-size: 12px;
+  color: #444;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>Books of Accounts</h1>
+  <h2 id="entitySubtitle">In the Books of "Entity Name"</h2>
+
+  <div class="quickfind">
+    <input type="text" id="quickFindInput" placeholder="Quick find... e.g. credit note, ledger, GST"
+           oninput="filterMenu(this.value)" autocomplete="off">
+  </div>
+  <div id="noResults">No matching page. Try a different word.</div>
+
+  <!-- Low Stock Alerts widget (Scrap & Reorder Alerts, Step 9) — populated
+       from GET /report/low-stock on load; stays hidden if nothing qualifies. -->
+  <div class="lowstock-box" id="lowStockBox" style="display:none;">
+    <div class="lowstock-title">⚠️ Low Stock Alerts</div>
+    <table class="lowstock-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Balance</th>
+          <th>Reorder Level</th>
+          <th>Suggested Reorder Qty</th>
+        </tr>
+      </thead>
+      <tbody id="lowStockBody"></tbody>
+    </table>
+    <div class="lowstock-footnote">Click an item to drill down in the Item Wise Report.</div>
+  </div>
+
+  <div class="section-grid" id="sectionGrid">
+
+    <!-- SALES & RECEIVABLES -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">🧾 Sales &amp; Receivables</div>
+
+      <div class="group-label">New</div>
+      <div class="new-actions">
+        <a href="Sales Order.html" data-label="new sales order">Sales Order</a>
+        <a href="Delivery Challan.html" data-label="new delivery challan">Delivery Challan</a>
+        <a href="Sales Book.html" data-label="new sales invoice sales book">Sales Invoice</a>
+        <a href="Credit Note.html" data-label="new credit note">Credit Note</a>
+      </div>
+
+      <div class="group-label">Registers</div>
+      <div class="link-list">
+        <a href="Sales Order Register.html" data-label="sales order register">📋 Sales Order Register</a>
+        <a href="Delivery Challan Register.html" data-label="delivery challan register">📋 Delivery Challan Register</a>
+        <a href="Credit Note Register.html" data-label="credit note register">📋 Credit Note Register</a>
+      </div>
+
+      <div class="group-label">Master</div>
+      <div class="link-list">
+        <a href="Clients.html" data-label="clients customers master">👤 Clients</a>
+      </div>
+    </div>
+
+    <!-- PURCHASES & PAYABLES -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">🛒 Purchases &amp; Payables</div>
+
+      <div class="group-label">New</div>
+      <div class="new-actions">
+        <a href="Purchase Order.html" data-label="new purchase order">Purchase Order</a>
+        <a href="Goods Receipt.html" data-label="new goods receipt grn">Goods Receipt</a>
+        <a href="Purchase Book.html" data-label="new purchase invoice purchase book">Purchase Invoice</a>
+        <a href="Debit Note.html" data-label="new debit note">Debit Note</a>
+      </div>
+
+      <div class="group-label">Registers</div>
+      <div class="link-list">
+        <a href="Purchase Order Register.html" data-label="purchase order register">📋 Purchase Order Register</a>
+        <a href="Debit Note Register.html" data-label="debit note register">📋 Debit Note Register</a>
+      </div>
+
+      <div class="group-label">Master</div>
+      <div class="link-list">
+        <a href="Suppliers.html" data-label="suppliers vendors master">🏭 Suppliers</a>
+      </div>
+    </div>
+
+    <!-- INVENTORY -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">📦 Inventory</div>
+
+      <div class="group-label">New</div>
+      <div class="link-list">
+        <a href="Stock Transfer.html" data-label="stock transfer move stock between locations rm store fg store shop floor">🔁 Stock Transfer</a>
+      </div>
+
+      <div class="group-label">Registers</div>
+      <div class="link-list">
+        <a href="Stock Transfer Register.html" data-label="stock transfer register list history from to location">📋 Stock Transfer Register</a>
+      </div>
+
+      <div class="group-label">Master</div>
+      <div class="link-list">
+        <a href="Item Master.html" data-label="item master items products hsn gst rate supply type">🏷️ Item Master</a>
+        <a href="Locations.html" data-label="locations warehouse master rm store fg store shop floor qc hold">📍 Locations</a>
+      </div>
+
+      <div class="group-label">Reports</div>
+      <div class="link-list">
+        <a href="Item Wise Report.html" data-label="item wise report stock movement">📋 Item Wise Report</a>
+      </div>
+    </div>
+
+    <!-- PRODUCTION -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">🏭 Production</div>
+
+      <div class="group-label">New</div>
+      <div class="link-list">
+        <a href="Bill of Materials.html" data-label="new bill of materials bom fg wip components">🧮 Bill of Materials</a>
+        <a href="Work Order.html" data-label="new work order production voucher issue rm complete fg">🏗️ Work Order</a>
+      </div>
+
+      <div class="group-label">Registers</div>
+      <div class="link-list">
+        <a href="BOM Register.html" data-label="bom register bill of materials list versions cost rollup">📋 BOM Register</a>
+        <a href="Work Order Register.html" data-label="work order register production list issued completed status">📋 Work Order Register</a>
+      </div>
+    </div>
+
+    <!-- BANKING & PAYMENTS -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">💵 Banking &amp; Payments</div>
+
+      <div class="group-label">Books</div>
+      <div class="link-list">
+        <a href="Cash Book.html" data-label="cash bank book">💰 Cash / Bank Book</a>
+        <a href="Payment and Receipt.html" data-label="payment receipt voucher">💵 Payment / Receipt</a>
+      </div>
+
+      <div class="group-label">Reports</div>
+      <div class="link-list">
+        <a href="Outstanding and Ageing.html" data-label="outstanding ageing receivables payables">⏳ Outstanding &amp; Ageing</a>
+      </div>
+    </div>
+
+    <!-- ACCOUNTING BOOKS -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">📘 Accounting Books</div>
+
+      <div class="group-label">New</div>
+      <div class="new-actions">
+        <a href="Journal.html" data-label="new journal entry">Journal Entry</a>
+      </div>
+
+      <div class="group-label">Registers &amp; Masters</div>
+      <div class="link-list">
+        <a href="Journal Register.html" data-label="journal register">🗑 Journal Register</a>
+        <a href="Ledger Master.html" data-label="ledger master chart of accounts">📒 Ledger Master</a>
+        <a href="Ledger.html" data-label="ledger account statement">📗 Ledger</a>
+      </div>
+    </div>
+
+    <!-- FINANCIAL REPORTS -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">📊 Financial Reports</div>
+
+      <div class="link-list">
+        <a href="Trial Balance.html" data-label="trial balance">📊 Trial Balance</a>
+        <a href="Profit and Loss.html" data-label="profit and loss p&l">📈 Profit &amp; Loss</a>
+        <a href="Balance Sheet.html" data-label="balance sheet">📄 Balance Sheet</a>
+      </div>
+    </div>
+
+    <!-- GST & COMPLIANCE -->
+    <div class="compartment" data-section>
+      <div class="compartment-title">🧮 GST &amp; Compliance</div>
+
+      <div class="link-list">
+        <a href="GST Details.html" data-label="gst details gstr-1 summary export">🧾 GST Details</a>
+        <a href="HSN Summary.html" data-label="hsn summary gstr-1 table 12">🔢 HSN Summary (GSTR-1 Table 12)</a>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="compartment single" data-section>
+      <div class="compartment-title">⚙️ Administration</div>
+      <a href="Settings.html" data-label="settings company profile gstin invoice template email whatsapp">⚙️ Settings</a>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <p>Prepared for Accounting &amp; Audit Purposes</p>
+  </div>
+
+</div>
+
+<script>
+// Show the actual company name (Settings → Company Profile) instead of the
+// static "Entity Name" placeholder, when one is on file.
+fetch(API_BASE_URL + "/settings")
+  .then(r => r.json())
+  .then(s => {
+    if (s && s.company_name) {
+      document.getElementById("entitySubtitle").textContent = `In the Books of "${s.company_name}"`;
+    }
+  })
+  .catch(() => {});
+
+// Low Stock Alerts widget (Scrap & Reorder Alerts, Step 9): reads Step 8's
+// /report/low-stock, which already does all the filtering (reorder_level >
+// 0, balance <= reorder_level) and ordering (most overdue first) — this is
+// pure rendering, no re-deriving numbers on the frontend. Each row links
+// through to Item Wise Report.html?item_id=<id>, which Step 9 also teaches
+// to auto-select that item on load for a real one-click drill-down.
+// Left hidden (default style="display:none" above) unless at least one row
+// comes back, so a healthy-stock business never sees an empty amber box.
+fetch(API_BASE_URL + "/report/low-stock")
+  .then(r => r.json())
+  .then(rows => {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+
+    const tbody = document.getElementById("lowStockBody");
+    rows.forEach(row => {
+      const tr = document.createElement("tr");
+      const suggestedQty = row.reorder_qty > 0 ? row.reorder_qty : "-";
+      tr.innerHTML = `
+        <td><a href="Item Wise Report.html?item_id=${row.item_id}">${row.item_name}</a></td>
+        <td class="lowstock-balance">${row.balance} ${row.unit}</td>
+        <td>${row.reorder_level} ${row.unit}</td>
+        <td>${suggestedQty}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById("lowStockBox").style.display = "block";
+  })
+  .catch(() => {}); // a widget failure shouldn't block the rest of the menu
+
+// Quick find: filters individual links across every compartment by their
+// visible text + a few extra search keywords in data-label, and hides a
+// whole compartment once none of its links match.
+function filterMenu(query) {
+  const q = query.trim().toLowerCase();
+  const sections = document.querySelectorAll("[data-section]");
+  let anyVisible = false;
+
+  sections.forEach(section => {
+    const links = section.querySelectorAll("a[data-label], .compartment.single > a");
+    let sectionHasMatch = false;
+
+    links.forEach(link => {
+      const haystack = ((link.dataset.label || "") + " " + link.textContent).toLowerCase();
+      const match = q === "" || haystack.includes(q);
+      link.style.display = match ? "" : "none";
+      if (match) sectionHasMatch = true;
+    });
+
+    // Also hide now-empty group labels within this section
+    section.querySelectorAll(".group-label").forEach(label => {
+      let sib = label.nextElementSibling;
+      const visibleInGroup = sib && Array.from(sib.querySelectorAll("a")).some(a => a.style.display !== "none");
+      label.style.display = (q === "" || visibleInGroup) ? "" : "none";
+      if (sib) sib.style.display = (q === "" || visibleInGroup) ? "" : "none";
+    });
+
+    section.style.display = sectionHasMatch ? "" : "none";
+    if (sectionHasMatch) anyVisible = true;
+  });
+
+  document.getElementById("noResults").style.display = anyVisible ? "none" : "block";
+}
+</script>
+
+</body>
+</html>
