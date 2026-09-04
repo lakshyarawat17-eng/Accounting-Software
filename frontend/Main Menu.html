@@ -2,73 +2,106 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="config.js"></script>
 <title>Books of Accounts – Main Menu</title>
 
 <style>
-@page {
-  margin: 20mm;
-}
-
+@page { margin: 14mm; }
 * { box-sizing: border-box; }
 
-body {
-  font-family: "Times New Roman", serif;
-  background-color: #f5f5f5;
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --border: #dde2e8;
+  --ink: #17222e;
+  --ink-soft: #5c6b7b;
+  --ink-faint: #8996a5;
+  --accent: #1f3a52;
+  --focus: #2c5f8a;
+
+  --amber: #92660b;
+  --amber-border: #c9a227;
+  --amber-bg: #fff8e6;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--ink);
   margin: 0;
   padding: 0;
+  font-size: 13px;
+}
+
+a { color: inherit; }
+a:focus-visible, input:focus-visible, button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 
 /* Container */
 .container {
-  width: 1000px;
-  max-width: 96%;
-  margin: 40px auto;
-  background: white;
-  border: 1px solid #000;
-  padding: 30px 34px;
+  width: 1360px;
+  max-width: 97%;
+  margin: 22px auto 36px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: 5px;
+  padding: 18px 22px 22px 22px;
 }
 
-/* Heading */
-h1 {
-  text-align: center;
-  font-size: 24px;
-  margin: 0 0 4px 0;
+/* Header */
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-h2 {
-  text-align: center;
-  font-size: 16px;
-  font-weight: normal;
-  margin: 0 0 22px 0;
-  color: #333;
+.masthead h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+  letter-spacing: 0.2px;
 }
 
-/* Quick find */
-.quickfind {
-  margin: 0 auto 26px auto;
-  max-width: 420px;
+.masthead .subtitle {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 2px;
 }
+
+.quickfind { width: 300px; max-width: 100%; }
 
 .quickfind input {
   width: 100%;
-  padding: 9px 12px;
+  padding: 7px 10px;
   font-family: inherit;
-  font-size: 14px;
-  border: 1px solid #000;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fbfcfd;
 }
 
-.quickfind input:focus {
-  outline: 2px solid #444;
-  outline-offset: -1px;
-}
+.quickfind input::placeholder { color: var(--ink-faint); }
 
 #noResults {
   display: none;
   text-align: center;
-  font-size: 13px;
-  color: #666;
-  margin-bottom: 18px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
 }
 
 /* Low Stock Alerts widget (Scrap & Reorder Alerts, Step 9) — hidden
@@ -76,101 +109,167 @@ h2 {
    qualifying item, same "don't clutter when there's nothing to show"
    convention as the Item Wise Report's unassigned/unassigned_batch notes. */
 .lowstock-box {
-  border: 1px solid #b8860b;
-  background: #fff9e6;
-  padding: 12px 16px 14px 16px;
-  margin: 0 0 20px 0;
+  border: 1px solid var(--amber-border);
+  border-left: 3px solid var(--amber-border);
+  background: var(--amber-bg);
+  border-radius: 4px;
+  padding: 8px 14px 10px 14px;
+  margin: 0 0 14px 0;
 }
 
 .lowstock-title {
-  font-size: 14px;
-  font-weight: bold;
-  color: #7a5b00;
-  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--amber);
+  margin-bottom: 6px;
 }
 
 .lowstock-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .lowstock-table th, .lowstock-table td {
   text-align: left;
-  padding: 4px 8px 4px 0;
-  border-bottom: 1px solid #e6d798;
+  padding: 3px 10px 3px 0;
+  border-bottom: 1px solid #ecdca4;
 }
 
 .lowstock-table th {
-  font-weight: bold;
-  color: #7a5b00;
+  font-weight: 600;
+  color: var(--amber);
+  font-size: 11px;
 }
 
-.lowstock-table tr:last-child td {
-  border-bottom: none;
-}
+.lowstock-table tr:last-child td { border-bottom: none; }
 
 .lowstock-table a {
-  color: #1a1a1a;
-  font-weight: bold;
+  color: var(--ink);
+  font-weight: 600;
   text-decoration: none;
 }
 
-.lowstock-table a:hover {
-  text-decoration: underline;
-}
+.lowstock-table a:hover { text-decoration: underline; }
 
-.lowstock-balance {
-  color: #b30000;
-  font-weight: bold;
-}
+.lowstock-balance { color: #a3312d; font-weight: 700; }
 
 .lowstock-footnote {
-  margin-top: 8px;
-  font-size: 11px;
-  color: #7a5b00;
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--amber);
 }
 
-/* Section grid — two compartments per row on a wide screen */
-.section-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 18px;
+/* ============ MODULE LAYOUT ============
+   Left: a narrow, always-visible list of module names.
+   Right: a blank panel by default; shows the selected module's
+   actions/registers/masters/reports only once that module is clicked. */
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
 }
 
-@media (max-width: 720px) {
-  .section-grid { grid-template-columns: 1fr; }
+.module-sidebar {
+  width: 250px;
+  flex: 0 0 250px;
+  border-right: 1px solid var(--border);
+  padding-right: 14px;
 }
 
-/* Each compartment */
-.compartment {
-  border: 1px solid #000;
-  padding: 14px 16px 16px 16px;
+.module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
+
+.module-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 8px 9px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.module-btn .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cat, var(--accent));
+  flex: 0 0 8px;
+}
+
+.module-btn:hover {
+  background: var(--cat-soft, #f2f4f6);
+}
+
+.module-btn.active {
+  background: var(--cat-soft, #f2f4f6);
+  border-color: var(--cat, var(--accent));
+  color: var(--cat, var(--accent));
+}
+
+/* Quick find can grey out modules that currently have no matching page,
+   without removing them from the list. */
+.module-btn.no-match {
+  opacity: 0.35;
+}
+
+.content-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 320px;
+}
+
+.content-placeholder {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 13px;
+  padding: 40px 20px;
+}
+
+/* Each module's detail view inside the right panel */
+.module-panel { display: none; }
+.module-panel.active { display: block; }
 
 .compartment-title {
   font-size: 15px;
-  font-weight: bold;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  border-bottom: 1px solid #000;
-  padding-bottom: 6px;
-  margin-bottom: 10px;
+  font-weight: 700;
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .group-label {
   font-size: 10.5px;
-  color: #666;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 10px 0 5px 0;
+  color: var(--cat, var(--ink-soft));
+  margin: 14px 0 6px 0;
 }
 
-.group-label:first-of-type {
-  margin-top: 0;
-}
+.group-label:first-of-type { margin-top: 0; }
 
-/* "New ___" primary actions — small pill-style buttons */
+/* "New ___" primary actions — small pill-style buttons in the module colour */
 .new-actions {
   display: flex;
   flex-wrap: wrap;
@@ -180,61 +279,96 @@ h2 {
 .new-actions a {
   display: inline-block;
   text-decoration: none;
-  color: black;
-  border: 1px solid black;
-  background: #f2f2f2;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-weight: bold;
+  color: var(--cat, var(--accent));
+  border: 1px solid var(--cat, var(--accent));
+  background: var(--cat-soft, #f2f4f6);
+  border-radius: 3px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .new-actions a:hover {
-  background: #333;
-  color: white;
+  background: var(--cat, var(--accent));
+  color: #fff;
 }
 
 /* Registers / masters / reports — plain link list */
 .link-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
 }
 
 .link-list a {
   text-decoration: none;
-  color: #1a1a1a;
-  font-size: 13.5px;
-  padding: 3px 2px;
-  border-bottom: 1px dotted transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  padding: 4px 5px;
+  border-radius: 3px;
 }
 
-.link-list a:hover {
-  border-bottom: 1px dotted #000;
-}
+.link-list a:hover { background: var(--cat-soft, #f2f4f6); }
 
-/* Single-item compartment (e.g. Settings) rendered without sub-groups */
-.compartment.single a {
+/* Single-item module (e.g. Settings) rendered without sub-groups */
+.module-panel.single a.single-link {
   display: block;
+  width: 260px;
+  max-width: 100%;
   text-decoration: none;
-  color: black;
-  border: 1px solid black;
-  padding: 14px;
+  color: var(--cat, var(--accent));
+  border: 1px solid var(--cat, var(--accent));
+  border-radius: 4px;
+  padding: 12px;
   text-align: center;
-  font-size: 15px;
-  font-weight: bold;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.compartment.single a:hover {
-  background: #eaeaea;
+.module-panel.single a.single-link:hover {
+  background: var(--cat, var(--accent));
+  color: #fff;
+}
+
+/* Module colour tokens */
+.cat-sales           { --cat: #2c5f8a; --cat-soft: #eaf1f7; }
+.cat-purchases        { --cat: #8a5a2c; --cat-soft: #f5efe7; }
+.cat-inventory        { --cat: #1f7a55; --cat-soft: #e9f5ef; }
+.cat-production        { --cat: #6b4e9e; --cat-soft: #f1edf7; }
+.cat-fixedassets       { --cat: #8a2c4e; --cat-soft: #f7eaef; }
+.cat-banking           { --cat: #1f7a72; --cat-soft: #e9f5f3; }
+.cat-books             { --cat: #2e3a4a; --cat-soft: #eef0f3; }
+.cat-financial          { --cat: #1f6f43; --cat-soft: #eaf4ee; }
+.cat-gst                { --cat: #9e6b1f; --cat-soft: #f7efe2; }
+.cat-hr                 { --cat: #4e5a9e; --cat-soft: #eef0f8; }
+.cat-admin              { --cat: #57677a; --cat-soft: #f0f2f4; }
+
+@media (max-width: 720px) {
+  .layout { flex-direction: column; }
+  .module-sidebar {
+    width: 100%;
+    flex: 1 1 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+  .module-list { flex-direction: row; flex-wrap: wrap; }
+  .module-btn { width: auto; }
+  .header-bar { align-items: flex-start; }
+  .quickfind { width: 100%; }
 }
 
 /* Footer */
 .footer {
   text-align: center;
-  margin-top: 30px;
-  font-size: 12px;
-  color: #444;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--ink-faint);
 }
 </style>
 </head>
@@ -243,13 +377,17 @@ h2 {
 
 <div class="container">
 
-  <h1>Books of Accounts</h1>
-  <h2 id="entitySubtitle">In the Books of "Entity Name"</h2>
-
-  <div class="quickfind">
-    <input type="text" id="quickFindInput" placeholder="Quick find... e.g. credit note, ledger, GST"
-           oninput="filterMenu(this.value)" autocomplete="off">
+  <div class="header-bar">
+    <div class="masthead">
+      <h1>Books of Accounts</h1>
+      <div class="subtitle" id="entitySubtitle">In the Books of "Entity Name"</div>
+    </div>
+    <div class="quickfind">
+      <input type="text" id="quickFindInput" placeholder="Quick find… e.g. credit note, ledger, GST"
+             oninput="filterMenu(this.value)" autocomplete="off">
+    </div>
   </div>
+
   <div id="noResults">No matching page. Try a different word.</div>
 
   <!-- Low Stock Alerts widget (Scrap & Reorder Alerts, Step 9) — populated
@@ -270,213 +408,260 @@ h2 {
     <div class="lowstock-footnote">Click an item to drill down in the Item Wise Report.</div>
   </div>
 
-  <div class="section-grid" id="sectionGrid">
+  <div class="layout">
 
-    <!-- SALES & RECEIVABLES -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">🧾 Sales &amp; Receivables</div>
+    <!-- LEFT: module names only -->
+    <nav class="module-sidebar">
+      <div class="module-list" id="moduleList">
+        <button type="button" class="module-btn cat-sales" data-module="sales" onclick="selectModule('sales')">
+          <span class="dot"></span>🧾 Sales &amp; Receivables
+        </button>
+        <button type="button" class="module-btn cat-purchases" data-module="purchases" onclick="selectModule('purchases')">
+          <span class="dot"></span>🛒 Purchases &amp; Payables
+        </button>
+        <button type="button" class="module-btn cat-inventory" data-module="inventory" onclick="selectModule('inventory')">
+          <span class="dot"></span>📦 Inventory
+        </button>
+        <button type="button" class="module-btn cat-production" data-module="production" onclick="selectModule('production')">
+          <span class="dot"></span>🏭 Production
+        </button>
+        <button type="button" class="module-btn cat-fixedassets" data-module="fixedassets" onclick="selectModule('fixedassets')">
+          <span class="dot"></span>🏢 Fixed Assets
+        </button>
+        <button type="button" class="module-btn cat-banking" data-module="banking" onclick="selectModule('banking')">
+          <span class="dot"></span>💵 Banking &amp; Payments
+        </button>
+        <button type="button" class="module-btn cat-books" data-module="books" onclick="selectModule('books')">
+          <span class="dot"></span>📘 Accounting Books
+        </button>
+        <button type="button" class="module-btn cat-financial" data-module="financial" onclick="selectModule('financial')">
+          <span class="dot"></span>📊 Financial Reports
+        </button>
+        <button type="button" class="module-btn cat-gst" data-module="gst" onclick="selectModule('gst')">
+          <span class="dot"></span>🧮 GST &amp; Compliance
+        </button>
+        <button type="button" class="module-btn cat-hr" data-module="hr" onclick="selectModule('hr')">
+          <span class="dot"></span>👥 HR &amp; Payroll
+        </button>
+        <button type="button" class="module-btn cat-admin" data-module="admin" onclick="selectModule('admin')">
+          <span class="dot"></span>⚙️ Administration / Settings
+        </button>
+      </div>
+    </nav>
 
-      <div class="group-label">New</div>
-      <div class="new-actions">
-        <a href="Sales Order.html" data-label="new sales order">Sales Order</a>
-        <a href="Delivery Challan.html" data-label="new delivery challan">Delivery Challan</a>
-        <a href="Sales Book.html" data-label="new sales invoice sales book">Sales Invoice</a>
-        <a href="Credit Note.html" data-label="new credit note">Credit Note</a>
+    <!-- RIGHT: blank unless a module is selected -->
+    <div class="content-panel" id="contentPanel">
+
+      <div class="content-placeholder" id="contentPlaceholder">
+        Select a module on the left to see its actions, registers and reports.
       </div>
 
-      <div class="group-label">Registers</div>
-      <div class="link-list">
-        <a href="Sales Order Register.html" data-label="sales order register">📋 Sales Order Register</a>
-        <a href="Delivery Challan Register.html" data-label="delivery challan register">📋 Delivery Challan Register</a>
-        <a href="Credit Note Register.html" data-label="credit note register">📋 Credit Note Register</a>
+      <!-- SALES & RECEIVABLES -->
+      <div class="module-panel cat-sales" data-section id="panel-sales">
+        <div class="compartment-title">🧾 Sales &amp; Receivables</div>
+
+        <div class="group-label">New</div>
+        <div class="new-actions">
+          <a href="Sales Order.html" data-label="new sales order">Sales Order</a>
+          <a href="Delivery Challan.html" data-label="new delivery challan">Delivery Challan</a>
+          <a href="Sales Book.html" data-label="new sales invoice sales book">Sales Invoice</a>
+          <a href="Credit Note.html" data-label="new credit note">Credit Note</a>
+        </div>
+
+        <div class="group-label">Registers</div>
+        <div class="link-list">
+          <a href="Sales Order Register.html" data-label="sales order register">📋 Sales Order Register</a>
+          <a href="Delivery Challan Register.html" data-label="delivery challan register">📋 Delivery Challan Register</a>
+          <a href="Credit Note Register.html" data-label="credit note register">📋 Credit Note Register</a>
+        </div>
+
+        <div class="group-label">Master</div>
+        <div class="link-list">
+          <a href="Clients.html" data-label="clients customers master">👤 Clients</a>
+        </div>
       </div>
 
-      <div class="group-label">Master</div>
-      <div class="link-list">
-        <a href="Clients.html" data-label="clients customers master">👤 Clients</a>
+      <!-- PURCHASES & PAYABLES -->
+      <div class="module-panel cat-purchases" data-section id="panel-purchases">
+        <div class="compartment-title">🛒 Purchases &amp; Payables</div>
+
+        <div class="group-label">New</div>
+        <div class="new-actions">
+          <a href="Purchase Order.html" data-label="new purchase order">Purchase Order</a>
+          <a href="Goods Receipt.html" data-label="new goods receipt grn">Goods Receipt</a>
+          <a href="Purchase Book.html" data-label="new purchase invoice purchase book">Purchase Invoice</a>
+          <a href="Debit Note.html" data-label="new debit note">Debit Note</a>
+        </div>
+
+        <div class="group-label">Registers</div>
+        <div class="link-list">
+          <a href="Purchase Order Register.html" data-label="purchase order register">📋 Purchase Order Register</a>
+          <a href="Debit Note Register.html" data-label="debit note register">📋 Debit Note Register</a>
+        </div>
+
+        <div class="group-label">Master</div>
+        <div class="link-list">
+          <a href="Suppliers.html" data-label="suppliers vendors master">🏭 Suppliers</a>
+        </div>
       </div>
+
+      <!-- INVENTORY -->
+      <div class="module-panel cat-inventory" data-section id="panel-inventory">
+        <div class="compartment-title">📦 Inventory</div>
+
+        <div class="group-label">New</div>
+        <div class="link-list">
+          <a href="Stock Transfer.html" data-label="stock transfer move stock between locations rm store fg store shop floor">🔁 Stock Transfer</a>
+        </div>
+
+        <div class="group-label">Registers</div>
+        <div class="link-list">
+          <a href="Stock Transfer Register.html" data-label="stock transfer register list history from to location">📋 Stock Transfer Register</a>
+        </div>
+
+        <div class="group-label">Master</div>
+        <div class="link-list">
+          <a href="Item Master.html" data-label="item master items products hsn gst rate supply type">🏷️ Item Master</a>
+          <a href="Locations.html" data-label="locations warehouse master rm store fg store shop floor qc hold">📍 Locations</a>
+        </div>
+
+        <div class="group-label">Reports</div>
+        <div class="link-list">
+          <a href="Item Wise Report.html" data-label="item wise report stock movement">📋 Item Wise Report</a>
+        </div>
+      </div>
+
+      <!-- PRODUCTION -->
+      <div class="module-panel cat-production" data-section id="panel-production">
+        <div class="compartment-title">🏭 Production</div>
+
+        <div class="group-label">New</div>
+        <div class="link-list">
+          <a href="Bill of Materials.html" data-label="new bill of materials bom fg wip components">🧮 Bill of Materials</a>
+          <a href="Work Order.html" data-label="new work order production voucher issue rm complete fg">🏗️ Work Order</a>
+        </div>
+
+        <div class="group-label">Registers</div>
+        <div class="link-list">
+          <a href="BOM Register.html" data-label="bom register bill of materials list versions cost rollup">📋 BOM Register</a>
+          <a href="Work Order Register.html" data-label="work order register production list issued completed status">📋 Work Order Register</a>
+        </div>
+      </div>
+
+      <!-- FIXED ASSETS -->
+      <div class="module-panel cat-fixedassets" data-section id="panel-fixedassets">
+        <div class="compartment-title">🏢 Fixed Assets</div>
+
+        <div class="group-label">Master</div>
+        <div class="link-list">
+          <a href="Assets.html" data-label="fixed asset master register plant machinery furniture vehicles computers buildings depreciation transfer dispose">🏢 Asset Master</a>
+        </div>
+
+        <div class="group-label">Periodic Processing</div>
+        <div class="link-list">
+          <a href="Depreciation Run.html" data-label="depreciation run process straight line written down value slm wdv journal">📉 Depreciation Run</a>
+        </div>
+
+        <div class="group-label">Reports</div>
+        <div class="link-list">
+          <a href="Asset Reports.html" data-label="fixed asset register depreciation schedule audit profit loss disposal physical verification checklist reconciliation balance sheet">📋 Asset Reports</a>
+        </div>
+      </div>
+
+      <!-- BANKING & PAYMENTS -->
+      <div class="module-panel cat-banking" data-section id="panel-banking">
+        <div class="compartment-title">💵 Banking &amp; Payments</div>
+
+        <div class="group-label">Books</div>
+        <div class="link-list">
+          <a href="Cash Book.html" data-label="cash bank book">💰 Cash / Bank Book</a>
+          <a href="Payment and Receipt.html" data-label="payment receipt voucher">💵 Payment / Receipt</a>
+        </div>
+
+        <div class="group-label">Reports</div>
+        <div class="link-list">
+          <a href="Outstanding and Ageing.html" data-label="outstanding ageing receivables payables">⏳ Outstanding &amp; Ageing</a>
+        </div>
+      </div>
+
+      <!-- ACCOUNTING BOOKS -->
+      <div class="module-panel cat-books" data-section id="panel-books">
+        <div class="compartment-title">📘 Accounting Books</div>
+
+        <div class="group-label">New</div>
+        <div class="new-actions">
+          <a href="Journal.html" data-label="new journal entry">Journal Entry</a>
+        </div>
+
+        <div class="group-label">Registers &amp; Masters</div>
+        <div class="link-list">
+          <a href="Journal Register.html" data-label="journal register">📔 Journal Register</a>
+          <a href="Ledger Master.html" data-label="ledger master chart of accounts">📒 Ledger Master</a>
+          <a href="Ledger.html" data-label="ledger account statement">📗 Ledger</a>
+        </div>
+      </div>
+
+      <!-- FINANCIAL REPORTS -->
+      <div class="module-panel cat-financial" data-section id="panel-financial">
+        <div class="compartment-title">📊 Financial Reports</div>
+
+        <div class="link-list">
+          <a href="Trial Balance.html" data-label="trial balance">📊 Trial Balance</a>
+          <a href="Profit and Loss.html" data-label="profit and loss p&l">📈 Profit &amp; Loss</a>
+          <a href="Balance Sheet.html" data-label="balance sheet">📄 Balance Sheet</a>
+        </div>
+      </div>
+
+      <!-- GST & COMPLIANCE -->
+      <div class="module-panel cat-gst" data-section id="panel-gst">
+        <div class="compartment-title">🧮 GST &amp; Compliance</div>
+
+        <div class="link-list">
+          <a href="GST Details.html" data-label="gst details gstr-1 summary export">🧾 GST Details</a>
+          <a href="HSN Summary.html" data-label="hsn summary gstr-1 table 12">🔢 HSN Summary (GSTR-1 Table 12)</a>
+        </div>
+      </div>
+
+      <!-- HR & PAYROLL -->
+      <div class="module-panel cat-hr" data-section id="panel-hr">
+        <div class="compartment-title">👥 HR &amp; Payroll</div>
+
+        <div class="group-label">New</div>
+        <div class="new-actions">
+          <a href="Employees.html" data-label="new employee onboarding hr">Employee</a>
+          <a href="Salary Structure.html" data-label="salary structure ctc components">Salary Structure</a>
+          <a href="Attendance.html" data-label="attendance lop days monthly">Attendance</a>
+          <a href="Employee Loans.html" data-label="employee loans advances emi">Loan / Advance</a>
+        </div>
+
+        <div class="group-label">Payroll</div>
+        <div class="link-list">
+          <a href="Payroll Run.html" data-label="payroll run process salary payslip">💰 Payroll Run</a>
+        </div>
+
+        <div class="group-label">Master</div>
+        <div class="link-list">
+          <a href="Employees.html" data-label="employee master list hr">👤 Employee Master</a>
+        </div>
+
+        <div class="group-label">Reports</div>
+        <div class="link-list">
+          <a href="Payroll Reports.html" data-label="salary register pf esi pt tds summary payroll reports">📋 Payroll Reports</a>
+        </div>
+
+        <div class="group-label">Settings</div>
+        <div class="link-list">
+          <a href="Payroll Settings.html" data-label="payroll settings pf esi pt rates tds slabs">⚙️ Payroll Settings</a>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="module-panel single cat-admin" data-section id="panel-admin">
+        <div class="compartment-title">⚙️ Administration / Settings</div>
+        <a class="single-link" href="Settings.html" data-label="settings company profile gstin invoice template email whatsapp">⚙️ Administration / Settings</a>
+      </div>
+
     </div>
-
-    <!-- PURCHASES & PAYABLES -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">🛒 Purchases &amp; Payables</div>
-
-      <div class="group-label">New</div>
-      <div class="new-actions">
-        <a href="Purchase Order.html" data-label="new purchase order">Purchase Order</a>
-        <a href="Goods Receipt.html" data-label="new goods receipt grn">Goods Receipt</a>
-        <a href="Purchase Book.html" data-label="new purchase invoice purchase book">Purchase Invoice</a>
-        <a href="Debit Note.html" data-label="new debit note">Debit Note</a>
-      </div>
-
-      <div class="group-label">Registers</div>
-      <div class="link-list">
-        <a href="Purchase Order Register.html" data-label="purchase order register">📋 Purchase Order Register</a>
-        <a href="Debit Note Register.html" data-label="debit note register">📋 Debit Note Register</a>
-      </div>
-
-      <div class="group-label">Master</div>
-      <div class="link-list">
-        <a href="Suppliers.html" data-label="suppliers vendors master">🏭 Suppliers</a>
-      </div>
-    </div>
-
-    <!-- INVENTORY -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">📦 Inventory</div>
-
-      <div class="group-label">New</div>
-      <div class="link-list">
-        <a href="Stock Transfer.html" data-label="stock transfer move stock between locations rm store fg store shop floor">🔁 Stock Transfer</a>
-      </div>
-
-      <div class="group-label">Registers</div>
-      <div class="link-list">
-        <a href="Stock Transfer Register.html" data-label="stock transfer register list history from to location">📋 Stock Transfer Register</a>
-      </div>
-
-      <div class="group-label">Master</div>
-      <div class="link-list">
-        <a href="Item Master.html" data-label="item master items products hsn gst rate supply type">🏷️ Item Master</a>
-        <a href="Locations.html" data-label="locations warehouse master rm store fg store shop floor qc hold">📍 Locations</a>
-      </div>
-
-      <div class="group-label">Reports</div>
-      <div class="link-list">
-        <a href="Item Wise Report.html" data-label="item wise report stock movement">📋 Item Wise Report</a>
-      </div>
-    </div>
-
-    <!-- PRODUCTION -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">🏭 Production</div>
-
-      <div class="group-label">New</div>
-      <div class="link-list">
-        <a href="Bill of Materials.html" data-label="new bill of materials bom fg wip components">🧮 Bill of Materials</a>
-        <a href="Work Order.html" data-label="new work order production voucher issue rm complete fg">🏗️ Work Order</a>
-      </div>
-
-      <div class="group-label">Registers</div>
-      <div class="link-list">
-        <a href="BOM Register.html" data-label="bom register bill of materials list versions cost rollup">📋 BOM Register</a>
-        <a href="Work Order Register.html" data-label="work order register production list issued completed status">📋 Work Order Register</a>
-      </div>
-    </div>
-
-    <!-- FIXED ASSETS -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">🏢 Fixed Assets</div>
-
-      <div class="group-label">Master</div>
-      <div class="link-list">
-        <a href="Assets.html" data-label="fixed asset master register plant machinery furniture vehicles computers buildings depreciation transfer dispose">🏢 Asset Master</a>
-      </div>
-
-      <div class="group-label">Periodic Processing</div>
-      <div class="link-list">
-        <a href="Depreciation Run.html" data-label="depreciation run process straight line written down value slm wdv journal">📉 Depreciation Run</a>
-      </div>
-
-      <div class="group-label">Reports</div>
-      <div class="link-list">
-        <a href="Asset Reports.html" data-label="fixed asset register depreciation schedule audit profit loss disposal physical verification checklist reconciliation balance sheet">📋 Asset Reports</a>
-      </div>
-    </div>
-
-    <!-- BANKING & PAYMENTS -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">💵 Banking &amp; Payments</div>
-
-      <div class="group-label">Books</div>
-      <div class="link-list">
-        <a href="Cash Book.html" data-label="cash bank book">💰 Cash / Bank Book</a>
-        <a href="Payment and Receipt.html" data-label="payment receipt voucher">💵 Payment / Receipt</a>
-      </div>
-
-      <div class="group-label">Reports</div>
-      <div class="link-list">
-        <a href="Outstanding and Ageing.html" data-label="outstanding ageing receivables payables">⏳ Outstanding &amp; Ageing</a>
-      </div>
-    </div>
-
-    <!-- ACCOUNTING BOOKS -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">📘 Accounting Books</div>
-
-      <div class="group-label">New</div>
-      <div class="new-actions">
-        <a href="Journal.html" data-label="new journal entry">Journal Entry</a>
-      </div>
-
-      <div class="group-label">Registers &amp; Masters</div>
-      <div class="link-list">
-        <a href="Journal Register.html" data-label="journal register">🗑 Journal Register</a>
-        <a href="Ledger Master.html" data-label="ledger master chart of accounts">📒 Ledger Master</a>
-        <a href="Ledger.html" data-label="ledger account statement">📗 Ledger</a>
-      </div>
-    </div>
-
-    <!-- FINANCIAL REPORTS -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">📊 Financial Reports</div>
-
-      <div class="link-list">
-        <a href="Trial Balance.html" data-label="trial balance">📊 Trial Balance</a>
-        <a href="Profit and Loss.html" data-label="profit and loss p&l">📈 Profit &amp; Loss</a>
-        <a href="Balance Sheet.html" data-label="balance sheet">📄 Balance Sheet</a>
-      </div>
-    </div>
-
-    <!-- GST & COMPLIANCE -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">🧮 GST &amp; Compliance</div>
-
-      <div class="link-list">
-        <a href="GST Details.html" data-label="gst details gstr-1 summary export">🧾 GST Details</a>
-        <a href="HSN Summary.html" data-label="hsn summary gstr-1 table 12">🔢 HSN Summary (GSTR-1 Table 12)</a>
-      </div>
-    </div>
-
-    <!-- HR & PAYROLL -->
-    <div class="compartment" data-section>
-      <div class="compartment-title">👥 HR &amp; Payroll</div>
-
-      <div class="group-label">New</div>
-      <div class="new-actions">
-        <a href="Employees.html" data-label="new employee onboarding hr">Employee</a>
-        <a href="Salary Structure.html" data-label="salary structure ctc components">Salary Structure</a>
-        <a href="Attendance.html" data-label="attendance lop days monthly">Attendance</a>
-        <a href="Employee Loans.html" data-label="employee loans advances emi">Loan / Advance</a>
-      </div>
-
-      <div class="group-label">Payroll</div>
-      <div class="link-list">
-        <a href="Payroll Run.html" data-label="payroll run process salary payslip">💰 Payroll Run</a>
-      </div>
-
-      <div class="group-label">Master</div>
-      <div class="link-list">
-        <a href="Employees.html" data-label="employee master list hr">👤 Employee Master</a>
-      </div>
-
-      <div class="group-label">Reports</div>
-      <div class="link-list">
-        <a href="Payroll Reports.html" data-label="salary register pf esi pt tds summary payroll reports">📋 Payroll Reports</a>
-      </div>
-
-      <div class="group-label">Settings</div>
-      <div class="link-list">
-        <a href="Payroll Settings.html" data-label="payroll settings pf esi pt rates tds slabs">⚙️ Payroll Settings</a>
-      </div>
-    </div>
-
-    <!-- SETTINGS -->
-    <div class="compartment single" data-section>
-      <div class="compartment-title">⚙️ Administration</div>
-      <a href="Settings.html" data-label="settings company profile gstin invoice template email whatsapp">⚙️ Settings</a>
-    </div>
-
   </div>
 
   <div class="footer">
@@ -527,38 +712,97 @@ fetch(API_BASE_URL + "/report/low-stock")
   })
   .catch(() => {}); // a widget failure shouldn't block the rest of the menu
 
-// Quick find: filters individual links across every compartment by their
-// visible text + a few extra search keywords in data-label, and hides a
-// whole compartment once none of its links match.
+// ---- Module selection ----
+// Right panel stays blank until a module button on the left is clicked.
+let activeModule = null;
+
+function selectModule(id) {
+  activeModule = id;
+
+  document.querySelectorAll(".module-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.module === id);
+  });
+
+  document.querySelectorAll(".module-panel").forEach(panel => {
+    panel.classList.toggle("active", panel.id === "panel-" + id);
+  });
+
+  document.getElementById("contentPlaceholder").style.display = "none";
+
+  // Re-apply whatever quick-find filter is currently active to the newly
+  // shown panel, so switching modules mid-search still respects the query.
+  applyLinkFilter(document.getElementById("quickFindInput").value);
+}
+
+// ---- Quick find ----
+// Filters individual links (by visible text + data-label) inside a module
+// panel, and hides empty group labels. Also greys out — but keeps visible —
+// sidebar buttons for modules with no matching page, and auto-opens the
+// first matching module so a search always shows something without the
+// user having to guess which module to click first.
+function applyLinkFilter(query) {
+  const q = query.trim().toLowerCase();
+
+  document.querySelectorAll("[data-section]").forEach(section => {
+    const links = section.querySelectorAll("a[data-label]");
+    links.forEach(link => {
+      const haystack = ((link.dataset.label || "") + " " + link.textContent).toLowerCase();
+      link.style.display = (q === "" || haystack.includes(q)) ? "" : "none";
+    });
+
+    section.querySelectorAll(".group-label").forEach(label => {
+      const sib = label.nextElementSibling;
+      const visibleInGroup = sib && Array.from(sib.querySelectorAll("a")).some(a => a.style.display !== "none");
+      const show = q === "" || visibleInGroup;
+      label.style.display = show ? "" : "none";
+      if (sib) sib.style.display = show ? "" : "none";
+    });
+  });
+}
+
 function filterMenu(query) {
   const q = query.trim().toLowerCase();
   const sections = document.querySelectorAll("[data-section]");
-  let anyVisible = false;
+  const matchingModules = [];
 
   sections.forEach(section => {
-    const links = section.querySelectorAll("a[data-label], .compartment.single > a");
-    let sectionHasMatch = false;
-
-    links.forEach(link => {
+    const links = section.querySelectorAll("a[data-label]");
+    const hasMatch = q === "" || Array.from(links).some(link => {
       const haystack = ((link.dataset.label || "") + " " + link.textContent).toLowerCase();
-      const match = q === "" || haystack.includes(q);
-      link.style.display = match ? "" : "none";
-      if (match) sectionHasMatch = true;
+      return haystack.includes(q);
     });
-
-    // Also hide now-empty group labels within this section
-    section.querySelectorAll(".group-label").forEach(label => {
-      let sib = label.nextElementSibling;
-      const visibleInGroup = sib && Array.from(sib.querySelectorAll("a")).some(a => a.style.display !== "none");
-      label.style.display = (q === "" || visibleInGroup) ? "" : "none";
-      if (sib) sib.style.display = (q === "" || visibleInGroup) ? "" : "none";
-    });
-
-    section.style.display = sectionHasMatch ? "" : "none";
-    if (sectionHasMatch) anyVisible = true;
+    if (hasMatch) matchingModules.push(section.id.replace("panel-", ""));
   });
 
-  document.getElementById("noResults").style.display = anyVisible ? "none" : "block";
+  document.querySelectorAll(".module-btn").forEach(btn => {
+    const matches = q === "" || matchingModules.includes(btn.dataset.module);
+    btn.classList.toggle("no-match", !matches);
+  });
+
+  applyLinkFilter(query);
+
+  if (q === "") {
+    document.getElementById("noResults").style.display = "none";
+    return;
+  }
+
+  if (matchingModules.length === 0) {
+    document.getElementById("noResults").style.display = "block";
+    // Nothing matches anywhere — clear the current selection back to blank.
+    activeModule = null;
+    document.querySelectorAll(".module-btn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".module-panel").forEach(panel => panel.classList.remove("active"));
+    document.getElementById("contentPlaceholder").style.display = "flex";
+    return;
+  }
+
+  document.getElementById("noResults").style.display = "none";
+
+  // If nothing is selected yet, or the current selection has no match,
+  // jump to the first module that does.
+  if (!activeModule || !matchingModules.includes(activeModule)) {
+    selectModule(matchingModules[0]);
+  }
 }
 </script>
 
