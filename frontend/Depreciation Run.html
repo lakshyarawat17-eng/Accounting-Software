@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Depreciation Run</title>
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 950px; max-width: 97%; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; margin-top: 0; }
+.top-links { text-align:right; font-size:12px; margin-bottom:8px; }
+.top-links a { margin-left: 12px; }
+.two-col { display:flex; gap: 24px; }
+.left { width: 260px; flex-shrink:0; }
+.right { flex:1; min-width:0; }
+.picker { padding: 10px; border: 1px solid #999; background:#f7f7f7; }
+.picker label { display:block; font-size: 13px; margin-top: 8px; }
+.picker input, .picker button { padding: 6px 8px; font-size: 13px; margin-top: 4px; width: 100%; box-sizing: border-box; }
+#runList { margin-top: 16px; }
+#runList div { padding: 5px 6px; font-size: 12.5px; border-bottom: 1px solid #eee; cursor: pointer; }
+#runList div:hover { background: #eef; }
+#runList .status { float:right; font-weight:bold; }
+.status-DRAFT { color:#b8860b; }
+.status-PROCESSED { color:#06c; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12.5px; }
+th, td { border: 1px solid black; padding: 5px 6px; }
+th { background: #f2f2f2; }
+.totals-row td { font-weight: bold; background: #fafafa; }
+.run-header { display:flex; justify-content: space-between; align-items:center; margin-bottom: 10px; }
+.run-header .title { font-size: 15px; font-weight: bold; }
+.actions button { margin-left: 6px; padding: 6px 12px; cursor: pointer; }
+#statusMsg { margin-top: 10px; font-size: 13px; }
+.note { font-size: 11px; color: #777; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="top-links">
+    <a href="Main Menu.html">&larr; Main Menu</a>
+    <a href="Assets.html">Asset Master &rarr;</a>
+    <a href="Asset Reports.html">Asset Reports &rarr;</a>
+  </div>
+  <h2>Depreciation Run</h2>
+
+  <div class="two-col">
+    <div class="left">
+      <div class="picker">
+        <label>
+          Period Start
+          <input type="date" id="periodStart">
+        </label>
+        <label>
+          Period End
+          <input type="date" id="periodEnd">
+        </label>
+        <button onclick="createRun()">Create / Refresh Draft</button>
+      </div>
+      <div id="runList"></div>
+    </div>
+
+    <div class="right">
+      <div id="runDetail">Pick a period and create a draft, or select an existing run, to begin.</div>
+    </div>
+  </div>
+  <div id="statusMsg"></div>
+</div>
+
+<script>
+const API = window.API_BASE_URL;
+
+// Default the picker to the current calendar month, same "sensible
+// default, still editable" convention Payroll Run's month/year picker
+// uses — a business running this monthly won't need to touch the dates
+// most of the time.
+(function setDefaultPeriod() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const start = new Date(Date.UTC(y, m, 1));
+  const end = new Date(Date.UTC(y, m + 1, 0));
+  document.getElementById("periodStart").value = start.toISOString().slice(0, 10);
+  document.getElementById("periodEnd").value = end.toISOString().slice(0, 10);
+})();
+
+let currentRunId = null;
+
+async function loadRunList() {
+  const res = await fetch(`${API}/depreciation-run/list`);
+  const rows = await res.json();
+  const box = document.getElementById("runList");
+  box.innerHTML = "";
+  rows.forEach(r => {
+    const div = document.createElement("div");
+    div.innerHTML = `${r.period_start} &rarr; ${r.period_end} <span class="status status-${r.status}">${r.status}</span>`;
+    div.onclick = () => openRun(r.id);
+    box.appendChild(div);
+  });
+}
+
+async function createRun() {
+  const msg = document.getElementById("statusMsg");
+  const periodStart = document.getElementById("periodStart").value;
+  const periodEnd = document.getElementById("periodEnd").value;
+  if (!periodStart || !periodEnd) {
+    msg.style.color = "#a00";
+    msg.textContent = "Period start and end are required";
+    return;
+  }
+  const res = await fetch(`${API}/depreciation-run/create`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ period_start: periodStart, period_end: periodEnd })
+  });
+  const data = await res.json();
+  if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error; return; }
+  msg.style.color = "#070";
+  msg.textContent = `Draft ready — ${data.assets_processed} asset(s) computed.`;
+  loadRunList();
+  openRun(data.run_id);
+}
+
+async function openRun(id) {
+  currentRunId = id;
+  const res = await fetch(`${API}/depreciation-run/${id}`);
+  const data = await res.json();
+  renderRun(data);
+}
+
+function renderRun(data) {
+  const { run, details, total } = data;
+  let html = `<div class="run-header">
+    <div class="title">${run.period_start} &rarr; ${run.period_end} — <span class="status-${run.status}">${run.status}</span></div>
+    <div class="actions">`;
+  if (run.status === "DRAFT") {
+    html += `<button onclick="processRun()">Process (Post to Ledger)</button><button onclick="cancelRun()">Cancel Draft</button>`;
+  }
+  html += `</div></div>`;
+
+  if (run.journal_voucher_no) html += `<div class="note">Depreciation journal voucher: <b>${run.journal_voucher_no}</b></div>`;
+
+  if (!details.length) {
+    html += `<p class="note">No active asset accrued a depreciation charge for this period.</p>`;
+  } else {
+    html += `<table><thead><tr>
+      <th>Asset</th><th>Category</th><th>Opening WDV</th><th>Depreciation</th><th>Closing WDV</th>
+    </tr></thead><tbody>`;
+    details.forEach(d => {
+      html += `<tr>
+        <td>${d.asset_code ? d.asset_code + " — " : ""}${d.asset_name}</td>
+        <td>${d.category_name}</td>
+        <td>₹${Number(d.opening_wdv).toLocaleString("en-IN")}</td>
+        <td>₹${Number(d.depreciation_amount).toLocaleString("en-IN")}</td>
+        <td>₹${Number(d.closing_wdv).toLocaleString("en-IN")}</td>
+      </tr>`;
+    });
+    html += `<tr class="totals-row">
+      <td colspan="3">TOTAL</td>
+      <td>₹${Number(total).toLocaleString("en-IN")}</td>
+      <td></td>
+    </tr></tbody></table>`;
+  }
+
+  html += `<div class="note">Processing posts one consolidated journal — Dr Depreciation A/c / Cr Accumulated Depreciation A/c — for the total above, and locks this run from further edits.</div>`;
+
+  document.getElementById("runDetail").innerHTML = html;
+}
+
+async function processRun() {
+  if (!confirm("Process this depreciation run? This posts a journal voucher and locks the draft for editing.")) return;
+  const res = await fetch(`${API}/depreciation-run/${currentRunId}/process`, { method: "POST" });
+  const data = await res.json();
+  const msg = document.getElementById("statusMsg");
+  if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error; return; }
+  msg.style.color = "#070";
+  msg.textContent = `Processed. Journal voucher ${data.voucher_no} posted for ₹${Number(data.total).toLocaleString("en-IN")}.`;
+  loadRunList();
+  openRun(currentRunId);
+}
+
+async function cancelRun() {
+  if (!confirm("Cancel and delete this draft run?")) return;
+  await fetch(`${API}/depreciation-run/${currentRunId}/cancel`, { method: "POST" });
+  document.getElementById("runDetail").innerHTML = "Pick a period and create a draft, or select an existing run, to begin.";
+  loadRunList();
+}
+
+loadRunList();
+</script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>BOM Register</title>
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.top-actions {
+  text-align: right;
+  margin-bottom: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+}
+.badge-DRAFT { background: #888; }
+.badge-ACTIVE { background: #1a7f37; }
+.badge-OBSOLETE { background: #a00; }
+
+.other-versions {
+  font-size: 12px;
+  color: #555;
+}
+
+button {
+  margin: 1px;
+  cursor: pointer;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.detail-row td {
+  background: #fafafa;
+}
+
+.detail-total {
+  margin-top: 6px;
+  font-weight: bold;
+  text-align: right;
+}
+</style>
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">BOM Register</div>
+
+<div class="top-actions">
+  <a href="Bill of Materials.html"><button>➕ New BOM</button></a>
+</div>
+
+<table id="bomTable">
+  <tr>
+    <th>FG / WIP Item</th>
+    <th>BOM No</th>
+    <th>Version</th>
+    <th>Status</th>
+    <th>Effective Date</th>
+    <th>Other Versions</th>
+    <th>Actions</th>
+  </tr>
+</table>
+<div id="emptyMsg" class="empty" style="display:none;">No BOMs yet.</div>
+
+<script>
+async function loadBOMs() {
+  const res = await fetch(API_BASE_URL + "/bom/list");
+  const list = await res.json();
+
+  const table = document.getElementById("bomTable");
+  const emptyMsg = document.getElementById("emptyMsg");
+
+  table.innerHTML = `
+    <tr>
+      <th>FG / WIP Item</th>
+      <th>BOM No</th>
+      <th>Version</th>
+      <th>Status</th>
+      <th>Effective Date</th>
+      <th>Other Versions</th>
+      <th>Actions</th>
+    </tr>
+  `;
+
+  if (!list.length) {
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+
+  list.forEach(bom => {
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${bom.fg_item_name}</td>
+      <td>${bom.bom_no}</td>
+      <td class="center">${bom.version}</td>
+      <td class="center"><span class="badge badge-${bom.status}">${bom.status}</span></td>
+      <td class="center">${bom.effective_date || ""}</td>
+      <td class="center other-versions">${bom.other_versions > 0 ? `+${bom.other_versions} other` : "—"}</td>
+      <td class="center">
+        <button onclick="goEdit(${bom.id})">📝 View / Edit</button>
+        <button onclick="toggleDetail(${bom.id}, this)">Components</button>
+        <button onclick="toggleCost(${bom.id}, this)">📊 Cost</button>
+      </td>
+    `;
+  });
+}
+
+function goEdit(id) {
+  window.location.href = `Bill of Materials.html?bom_id=${id}`;
+}
+
+const openRows = {};
+const openCostRows = {};
+
+/* Same expand-in-place pattern as Delivery Challan Register: fetches the
+   full BOM (with component lines) only when a row is opened, and toggles
+   a detail row underneath rather than navigating away. */
+async function toggleDetail(id, btn) {
+  const row = btn.closest("tr");
+
+  if (openRows[id]) {
+    openRows[id].remove();
+    delete openRows[id];
+    btn.textContent = "Components";
+    return;
+  }
+
+  btn.textContent = "Loading...";
+  const res = await fetch(API_BASE_URL + `/bom/${id}`);
+  const bom = await res.json();
+  btn.textContent = "Hide Components";
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "detail-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 7;
+
+  const items = bom.items || [];
+  cell.innerHTML = `
+    <table>
+      <tr>
+        <th>Component</th>
+        <th>Qty per Unit</th>
+        <th>Unit</th>
+        <th>Narration</th>
+      </tr>
+      ${items.map(it => `
+        <tr>
+          <td>${it.component_item_name}</td>
+          <td class="center">${it.qty_per_unit}</td>
+          <td class="center">${it.unit || it.component_unit || ""}</td>
+          <td>${it.narration || ""}</td>
+        </tr>
+      `).join("")}
+    </table>
+    ${!items.length ? `<div style="text-align:center; padding:8px; color:#666;">No components on this version yet.</div>` : ""}
+    ${bom.narration ? `<div style="margin-top:6px;">Narration: ${bom.narration}</div>` : ""}
+  `;
+  detailRow.appendChild(cell);
+  row.after(detailRow);
+  openRows[id] = detailRow;
+}
+
+/* 📊 VIEW BOM COST — same inline-table approach as toggleDetail above and
+   as Item Wise Report's by-location table, but pulling the live
+   standard-costing rollup (Step 5's GET /bom/:id/cost) instead of the raw
+   component list. Kept as its own toggle/row so Components and Cost can
+   both be open at once for the same BOM without fighting over one slot. */
+async function toggleCost(id, btn) {
+  const row = btn.closest("tr");
+
+  if (openCostRows[id]) {
+    openCostRows[id].remove();
+    delete openCostRows[id];
+    btn.textContent = "📊 Cost";
+    return;
+  }
+
+  btn.textContent = "Loading...";
+  const res = await fetch(API_BASE_URL + `/bom/${id}/cost`);
+  const cost = await res.json();
+  btn.textContent = "📊 Hide Cost";
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "detail-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 7;
+
+  if (cost.error) {
+    cell.innerHTML = `<div style="text-align:center; padding:8px; color:#a00;">${cost.error}</div>`;
+  } else {
+    const components = cost.components || [];
+    cell.innerHTML = `
+      <table>
+        <tr>
+          <th>Component</th>
+          <th>Qty per Unit</th>
+          <th>Unit</th>
+          <th>Current Rate</th>
+          <th>Line Cost</th>
+        </tr>
+        ${components.map(c => `
+          <tr>
+            <td>${c.component_item_name}</td>
+            <td class="center">${c.qty_per_unit}</td>
+            <td class="center">${c.unit || ""}</td>
+            <td class="amount">₹${Number(c.current_rate).toFixed(2)}</td>
+            <td class="amount">₹${Number(c.line_cost).toFixed(2)}</td>
+          </tr>
+        `).join("")}
+      </table>
+      <div class="detail-total">Total Cost per ${cost.fg_unit || "unit"}: ₹${Number(cost.total_cost_per_unit).toFixed(2)}</div>
+    `;
+  }
+
+  detailRow.appendChild(cell);
+  row.after(detailRow);
+  openCostRows[id] = detailRow;
+}
+
+loadBOMs();
+</script>
+
+</body>
+</html>
