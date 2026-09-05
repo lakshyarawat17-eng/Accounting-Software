@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Employee Master</title>
+
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 900px; max-width: 96%; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; margin-top: 0; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+.form-grid .full { grid-column: 1 / -1; }
+.form-grid .half { grid-column: span 2; }
+label { display: block; margin-top: 10px; font-size: 13px; }
+input, select, textarea { width: 100%; padding: 5px; margin-top: 3px; box-sizing: border-box; font-family: inherit; font-size: 13px; }
+textarea { resize: vertical; min-height: 40px; }
+button { margin-top: 15px; padding: 6px 14px; cursor: pointer; }
+.btn-row { text-align: right; }
+.btn-row button { margin-left: 8px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid black; padding: 5px 6px; font-size: 12.5px; }
+th { background: #f2f2f2; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: #f0f0f0; }
+#statusMsg { margin-top: 10px; font-size: 13px; color: #a00; }
+#searchBox { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+.section-title { margin-top: 18px; font-weight: bold; border-bottom: 1px solid #999; padding-bottom: 3px; }
+.badge { font-size: 11px; padding: 1px 6px; border: 1px solid #333; }
+.badge.exited { background:#eee; color:#888; }
+.top-links { text-align:right; font-size:12px; margin-bottom:8px; }
+.top-links a { margin-left: 10px; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+<body>
+
+<div class="container">
+  <div class="top-links"><a href="Main Menu.html">&larr; Main Menu</a></div>
+  <h2 id="formTitle">Add Employee</h2>
+
+  <div class="section-title">Basic Details</div>
+  <div class="form-grid">
+    <label class="half">Full Name * <input type="text" id="fullName"></label>
+    <label>Employee Code <input type="text" id="employeeCode" placeholder="auto if left blank"></label>
+
+    <label>Father / Husband Name <input type="text" id="fatherName"></label>
+    <label>Date of Birth <input type="date" id="dob"></label>
+    <label>Gender
+      <select id="gender"><option value="">--</option><option>Male</option><option>Female</option><option>Other</option></select>
+    </label>
+
+    <label>Date of Joining <input type="date" id="doj"></label>
+    <label>Status
+      <select id="status"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="EXITED">Exited</option></select>
+    </label>
+    <label>Date of Leaving <input type="date" id="dol"></label>
+
+    <label>Department <input type="text" id="department"></label>
+    <label>Designation <input type="text" id="designation"></label>
+    <label>Email <input type="email" id="email"></label>
+
+    <label>Phone <input type="text" id="phone"></label>
+    <label class="half">Address <input type="text" id="address"></label>
+  </div>
+
+  <div class="section-title">Statutory Details</div>
+  <div class="form-grid">
+    <label>PAN <input type="text" id="pan"></label>
+    <label>Aadhaar <input type="text" id="aadhaar"></label>
+    <label>UAN (PF) <input type="text" id="uan"></label>
+
+    <label>PF Number <input type="text" id="pfNumber"></label>
+    <label>ESI Number <input type="text" id="esiNumber"></label>
+    <label>PT State <input type="text" id="ptState" placeholder="e.g. Karnataka"></label>
+
+    <label>PF Applicable <select id="pfApplicable"><option value="1">Yes</option><option value="0">No</option></select></label>
+    <label>ESI Applicable <select id="esiApplicable"><option value="0">No</option><option value="1">Yes</option></select></label>
+    <label>PT Applicable <select id="ptApplicable"><option value="1">Yes</option><option value="0">No</option></select></label>
+
+    <label class="half">Declared Annual Investment (for TDS estimate) <input type="number" id="tdsDeclared" value="0"></label>
+  </div>
+
+  <div class="section-title">Bank Details</div>
+  <div class="form-grid">
+    <label>Bank Name <input type="text" id="bankName"></label>
+    <label>Account Number <input type="text" id="bankAccount"></label>
+    <label>IFSC <input type="text" id="bankIfsc"></label>
+  </div>
+
+  <label>Notes <textarea id="notes"></textarea></label>
+
+  <div id="statusMsg"></div>
+
+  <div class="btn-row">
+    <button id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">Cancel Edit</button>
+    <button id="saveBtn" onclick="saveEmployee()">Save Employee</button>
+  </div>
+
+  <hr style="margin-top:25px;">
+
+  <label>Search Employees
+    <input type="text" id="searchBox" placeholder="Type a name or code to filter…">
+  </label>
+
+  <table id="empTable">
+    <thead>
+      <tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Status</th><th>DOJ</th></tr>
+    </thead>
+    <tbody id="empBody"></tbody>
+  </table>
+</div>
+
+<script>
+const API = window.API_BASE_URL;
+let editId = null;
+
+async function loadEmployees(q) {
+  const url = q ? `${API}/hr/employees/search?q=${encodeURIComponent(q)}` : `${API}/hr/employees`;
+  const res = await fetch(url);
+  const rows = await res.json();
+  const body = document.getElementById("empBody");
+  body.innerHTML = "";
+  rows.forEach(e => {
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.onclick = () => loadForEdit(e.id);
+    tr.innerHTML = `<td>${e.employee_code||""}</td><td>${e.full_name}</td><td>${e.department||""}</td>
+      <td>${e.designation||""}</td><td>${e.status}</td><td>${e.doj||""}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+async function loadForEdit(id) {
+  const res = await fetch(`${API}/hr/employee/${id}`);
+  if (!res.ok) return;
+  const e = await res.json();
+  editId = id;
+  document.getElementById("formTitle").textContent = "Edit Employee — " + e.full_name;
+  document.getElementById("fullName").value = e.full_name || "";
+  document.getElementById("employeeCode").value = e.employee_code || "";
+  document.getElementById("fatherName").value = e.father_husband_name || "";
+  document.getElementById("dob").value = e.dob || "";
+  document.getElementById("gender").value = e.gender || "";
+  document.getElementById("doj").value = e.doj || "";
+  document.getElementById("status").value = e.status || "ACTIVE";
+  document.getElementById("dol").value = e.dol || "";
+  document.getElementById("department").value = e.department || "";
+  document.getElementById("designation").value = e.designation || "";
+  document.getElementById("email").value = e.email || "";
+  document.getElementById("phone").value = e.phone || "";
+  document.getElementById("address").value = e.address || "";
+  document.getElementById("pan").value = e.pan || "";
+  document.getElementById("aadhaar").value = e.aadhaar || "";
+  document.getElementById("uan").value = e.uan || "";
+  document.getElementById("pfNumber").value = e.pf_number || "";
+  document.getElementById("esiNumber").value = e.esi_number || "";
+  document.getElementById("ptState").value = e.pt_state || "";
+  document.getElementById("pfApplicable").value = String(e.pf_applicable);
+  document.getElementById("esiApplicable").value = String(e.esi_applicable);
+  document.getElementById("ptApplicable").value = String(e.pt_applicable);
+  document.getElementById("tdsDeclared").value = e.tds_declared_annual_investment || 0;
+  document.getElementById("bankName").value = e.bank_name || "";
+  document.getElementById("bankAccount").value = e.bank_account_no || "";
+  document.getElementById("bankIfsc").value = e.bank_ifsc || "";
+  document.getElementById("notes").value = e.notes || "";
+  document.getElementById("cancelEditBtn").style.display = "inline-block";
+  document.getElementById("saveBtn").textContent = "Update Employee";
+  window.scrollTo(0, 0);
+}
+
+function cancelEdit() {
+  editId = null;
+  document.getElementById("formTitle").textContent = "Add Employee";
+  document.querySelectorAll(".container input, .container textarea").forEach(el => el.value = "");
+  document.getElementById("pfApplicable").value = "1";
+  document.getElementById("esiApplicable").value = "0";
+  document.getElementById("ptApplicable").value = "1";
+  document.getElementById("status").value = "ACTIVE";
+  document.getElementById("cancelEditBtn").style.display = "none";
+  document.getElementById("saveBtn").textContent = "Save Employee";
+}
+
+async function saveEmployee() {
+  const msg = document.getElementById("statusMsg");
+  const fullName = document.getElementById("fullName").value.trim();
+  if (!fullName) { msg.textContent = "Full name is required."; return; }
+
+  const payload = {
+    full_name: fullName,
+    employee_code: document.getElementById("employeeCode").value.trim() || undefined,
+    father_husband_name: document.getElementById("fatherName").value,
+    dob: document.getElementById("dob").value,
+    gender: document.getElementById("gender").value,
+    doj: document.getElementById("doj").value,
+    status: document.getElementById("status").value,
+    dol: document.getElementById("dol").value,
+    department: document.getElementById("department").value,
+    designation: document.getElementById("designation").value,
+    email: document.getElementById("email").value,
+    phone: document.getElementById("phone").value,
+    address: document.getElementById("address").value,
+    pan: document.getElementById("pan").value,
+    aadhaar: document.getElementById("aadhaar").value,
+    uan: document.getElementById("uan").value,
+    pf_number: document.getElementById("pfNumber").value,
+    esi_number: document.getElementById("esiNumber").value,
+    pt_state: document.getElementById("ptState").value,
+    pf_applicable: Number(document.getElementById("pfApplicable").value),
+    esi_applicable: Number(document.getElementById("esiApplicable").value),
+    pt_applicable: Number(document.getElementById("ptApplicable").value),
+    tds_declared_annual_investment: Number(document.getElementById("tdsDeclared").value) || 0,
+    bank_name: document.getElementById("bankName").value,
+    bank_account_no: document.getElementById("bankAccount").value,
+    bank_ifsc: document.getElementById("bankIfsc").value,
+    notes: document.getElementById("notes").value
+  };
+
+  try {
+    let res;
+    if (editId) {
+      res = await fetch(`${API}/hr/employee/${editId}`, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+    } else {
+      res = await fetch(`${API}/hr/employee/create`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+    }
+    const data = await res.json();
+    if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error || "Error saving employee"; return; }
+    msg.style.color = "#070"; msg.textContent = editId ? "Employee updated." : `Employee saved as ${data.employee_code}.`;
+    cancelEdit();
+    loadEmployees();
+  } catch (err) {
+    msg.style.color = "#a00"; msg.textContent = "Network error: " + err.message;
+  }
+}
+
+document.getElementById("searchBox").addEventListener("input", e => loadEmployees(e.target.value));
+loadEmployees();
+</script>
+</body>
+</html>
