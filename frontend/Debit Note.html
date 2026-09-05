@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Debit Note</title>
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+#suggestions, #supplierSuggestions {
+  border: 1px solid #aaa;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  background: white;
+  z-index: 10;
+}
+#supplierSuggestions {
+  width: 260px;
+  display: none;
+}
+#suggestions div, #supplierSuggestions div {
+  padding: 6px;
+  cursor: pointer;
+}
+#suggestions div:hover, #supplierSuggestions div:hover {
+  background: #eee;
+}
+
+.totals-box {
+  margin-top: 10px;
+  text-align: right;
+}
+.totals-box div {
+  margin: 2px 0;
+}
+.totals-box .grand {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+/* Link-mode toggle */
+.type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+}
+.type-toggle button {
+  flex: 1;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  border: 1px solid black;
+  background: white;
+  cursor: pointer;
+}
+.type-toggle button.active {
+  background: #333;
+  color: white;
+}
+.type-toggle button:first-child { border-right: none; }
+
+.empty-msg {
+  color: #666;
+  font-style: italic;
+  padding: 10px;
+}
+
+.note {
+  font-size: 12px;
+  color: #555;
+  margin-top: 4px;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">Debit Note (Purchase Return / Adjustment)</div>
+
+<!-- LINK MODE TOGGLE -->
+<div class="type-toggle">
+  <button id="btnLinked" class="active" onclick="setMode('LINKED')">🔗 Against a Purchase Invoice</button>
+  <button id="btnIndependent" onclick="setMode('INDEPENDENT')">✏️ Independent</button>
+</div>
+
+<!-- 1️⃣ HEADER -->
+<div class="section-box">
+  <div class="section-title">Debit Note Details</div>
+
+  <label>Date:
+    <input type="date" id="noteDate">
+  </label>
+
+  <label>Note No:
+    <input type="text" id="noteNo" readonly style="background:#eee;">
+  </label>
+
+  <label style="position:relative;">Supplier:
+    <input type="text" id="supplier" placeholder="Search or type supplier name" autocomplete="off">
+    <div id="supplierSuggestions"></div>
+  </label>
+  <span id="supplierInfoLine" style="font-size:12px; color:#555;"></span>
+
+  <label id="taxTypeLabel">Adjustment Type:
+    <select id="taxType">
+      <option value="INTRA">Same State (CGST + SGST)</option>
+      <option value="INTER">Different State (IGST)</option>
+    </select>
+  </label>
+
+  <br><br>
+
+  <label>Reason:
+    <input type="text" id="reason" placeholder="e.g. Damaged goods, rate correction" style="width:300px;">
+  </label>
+
+  <label>
+    <input type="checkbox" id="adjustsStock" checked>
+    Adjust stock (goods physically returned)
+  </label>
+</div>
+
+<!-- 2️⃣ LINKED INVOICE SELECTION -->
+<div class="section-box" id="linkedBox">
+  <div class="section-title">Select Purchase Invoice</div>
+  <div id="invoicePickerArea">
+    <div class="empty-msg">Enter a supplier above to see their purchase invoices.</div>
+  </div>
+</div>
+
+<!-- 2️⃣b LINKED INVOICE ITEMS (pick what to return) -->
+<div class="section-box" id="linkedItemsBox" style="display:none;">
+  <div class="section-title">Items on <span id="linkedInvoiceNo"></span></div>
+  <div id="linkedItemsArea"></div>
+  <div class="note">Qty is capped at what hasn't already been returned against this invoice.</div>
+</div>
+
+<!-- 3️⃣ ADD ITEM (independent mode) -->
+<div class="section-box" id="addItemBox" style="display:none;">
+  <div class="section-title">Add Item</div>
+
+  <label>Item:
+    <input type="text" id="itemSearch" placeholder="Search item">
+    <div id="suggestions"></div>
+  </label>
+
+  <label>Qty:
+    <input type="number" id="itemQty" value="1">
+  </label>
+
+  <label>Rate ₹:
+    <input type="number" id="itemRate" step="0.01">
+  </label>
+
+  <label>GST Rate:
+    <select id="itemGstRate">
+      <option value="0">0%</option>
+      <option value="0.25">0.25%</option>
+      <option value="3">3%</option>
+      <option value="5">5%</option>
+      <option value="12">12%</option>
+      <option value="18" selected>18%</option>
+      <option value="28">28%</option>
+    </select>
+  </label>
+
+  <button onclick="addItem()">Add Item</button>
+</div>
+
+<!-- 4️⃣ ITEMS LIST -->
+<div class="section-box">
+  <div class="section-title">Debit Note Items</div>
+
+  <table id="itemsTable">
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  </table>
+
+  <div class="totals-box" id="totalsBox"></div>
+</div>
+
+<!-- 5️⃣ SAVE -->
+<div class="section-box">
+  <button onclick="saveDebitNote()">Save Debit Note</button>
+</div>
+
+<script>
+let mode = "LINKED";
+let items = []; // {item_id, invoice_item_id, item_name, qty, rate, amount, gst_rate, gst_amount}
+let selectedItem = null;
+let linkedInvoice = null; // full invoice object (with items) once picked
+
+const supplierInput = document.getElementById("supplier");
+const supplierSuggestions = document.getElementById("supplierSuggestions");
+const supplierInfoLine = document.getElementById("supplierInfoLine");
+const taxTypeSelect = document.getElementById("taxType");
+const itemSearch = document.getElementById("itemSearch");
+const suggestionsBox = document.getElementById("suggestions");
+const itemGstRate = document.getElementById("itemGstRate");
+
+let selectedSupplierId = null; // null = free-typed supplier name, no supplier record linked yet
+
+window.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("noteDate").valueAsDate = new Date();
+  loadNextNoteNo();
+  setMode("LINKED");
+});
+
+async function loadNextNoteNo() {
+  try {
+    const res = await fetch(API_BASE_URL + "/debit-note/next-number");
+    const data = await res.json();
+    if (data.noteNo) document.getElementById("noteNo").value = data.noteNo;
+  } catch (e) {
+    // Non-fatal — the backend assigns the real number on save regardless.
+  }
+}
+
+/* 🔍 SUPPLIER AUTOCOMPLETE (matches the client autocomplete on Sales Order) */
+supplierInput.addEventListener("input", async () => {
+  selectedSupplierId = null;
+  supplierInfoLine.textContent = "";
+  supplierSuggestions.innerHTML = "";
+  supplierSuggestions.style.display = "none";
+
+  const q = supplierInput.value.trim();
+  if (q.length < 1) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/suppliers/search?q=${encodeURIComponent(q)}`);
+    const list = await res.json();
+    if (!list.length) return;
+
+    list.forEach(supplier => {
+      const div = document.createElement("div");
+      div.textContent = supplier.gstin ? `${supplier.name} — ${supplier.gstin}` : supplier.name;
+      div.onclick = () => {
+        supplierInput.value = supplier.name;
+        selectedSupplierId = supplier.id;
+        supplierInfoLine.textContent = supplier.gstin
+          ? `GSTIN: ${supplier.gstin} — CGST/SGST vs IGST will be worked out automatically`
+          : "No GSTIN on file — Adjustment Type below will be used";
+        supplierSuggestions.innerHTML = "";
+        supplierSuggestions.style.display = "none";
+        if (mode === "LINKED") loadInvoicesForSupplier();
+      };
+      supplierSuggestions.appendChild(div);
+    });
+
+    supplierSuggestions.style.display = "block";
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!supplierSuggestions.contains(e.target) && e.target !== supplierInput) {
+    supplierSuggestions.style.display = "none";
+  }
+});
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("btnLinked").classList.toggle("active", m === "LINKED");
+  document.getElementById("btnIndependent").classList.toggle("active", m === "INDEPENDENT");
+  document.getElementById("linkedBox").style.display = m === "LINKED" ? "block" : "none";
+  document.getElementById("addItemBox").style.display = m === "INDEPENDENT" ? "block" : "none";
+  document.getElementById("taxTypeLabel").style.display = m === "LINKED" ? "none" : "inline";
+
+  linkedInvoice = null;
+  document.getElementById("linkedItemsBox").style.display = "none";
+  items = [];
+  renderItemsTable();
+
+  if (m === "LINKED" && supplierInput.value.trim()) {
+    loadInvoicesForSupplier();
+  }
+}
+
+/* Reload the invoice picker whenever the supplier changes, in LINKED mode */
+supplierInput.addEventListener("change", () => {
+  if (mode === "LINKED") loadInvoicesForSupplier();
+});
+
+async function loadInvoicesForSupplier() {
+  const area = document.getElementById("invoicePickerArea");
+  const supplier = supplierInput.value.trim();
+
+  linkedInvoice = null;
+  document.getElementById("linkedItemsBox").style.display = "none";
+  items = [];
+  renderItemsTable();
+
+  if (!supplier) {
+    area.innerHTML = `<div class="empty-msg">Enter a supplier above to see their purchase invoices.</div>`;
+    return;
+  }
+
+  area.innerHTML = `<div class="empty-msg">Loading...</div>`;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/purchase-invoice/list?supplier=${encodeURIComponent(supplier)}`);
+    const list = await res.json();
+
+    if (!list.length) {
+      area.innerHTML = `<div class="empty-msg">No purchase invoices found for this supplier yet.</div>`;
+      return;
+    }
+
+    area.innerHTML = `
+      <select id="invoiceSelect" style="width:100%; padding:6px;">
+        <option value="">-- Select an invoice --</option>
+        ${list.map(inv => `
+          <option value="${inv.id}">
+            ${inv.invoice_no} — ${inv.date} — Total ₹${inv.total_amount.toFixed(2)} — Balance ₹${inv.balance.toFixed(2)}
+          </option>
+        `).join("")}
+      </select>
+    `;
+    document.getElementById("invoiceSelect").addEventListener("change", onInvoiceSelected);
+  } catch (e) {
+    area.innerHTML = `<div class="empty-msg">Could not load purchase invoices.</div>`;
+  }
+}
+
+async function onInvoiceSelected(e) {
+  const id = e.target.value;
+  items = [];
+  renderItemsTable();
+
+  if (!id) {
+    linkedInvoice = null;
+    document.getElementById("linkedItemsBox").style.display = "none";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/purchase-invoice/${id}`);
+  const inv = await res.json();
+  if (inv.error) {
+    alert(inv.error);
+    return;
+  }
+
+  linkedInvoice = inv;
+  taxTypeSelect.value = inv.igst > 0 ? "INTER" : "INTRA";
+
+  document.getElementById("linkedInvoiceNo").textContent = inv.invoice_no;
+  document.getElementById("linkedItemsBox").style.display = "block";
+
+  const area = document.getElementById("linkedItemsArea");
+  area.innerHTML = `
+    <table>
+      <tr>
+        <th>Item</th>
+        <th>Billed Qty</th>
+        <th>Already Returned</th>
+        <th>Returnable</th>
+        <th>Return Qty</th>
+        <th>Rate</th>
+        <th>GST %</th>
+      </tr>
+      ${inv.items.map((it, idx) => {
+        const returnable = it.qty - it.already_debited_qty;
+        return `
+          <tr>
+            <td>${it.item_name}</td>
+            <td class="center">${it.qty}</td>
+            <td class="center">${it.already_debited_qty}</td>
+            <td class="center">${returnable}</td>
+            <td class="amount">
+              <input type="number" min="0" max="${returnable}" step="any" value="0"
+                     style="width:90px; text-align:right;" data-idx="${idx}"
+                     ${returnable <= 0 ? "disabled" : ""}
+                     onchange="onReturnQtyChange(this)">
+            </td>
+            <td class="amount">${it.rate.toFixed(2)}</td>
+            <td class="center">${it.gst_rate}%</td>
+          </tr>
+        `;
+      }).join("")}
+    </table>
+  `;
+}
+
+function onReturnQtyChange(input) {
+  const idx = Number(input.dataset.idx);
+  const it = linkedInvoice.items[idx];
+  const returnable = it.qty - it.already_debited_qty;
+  let qty = Number(input.value) || 0;
+
+  if (qty > returnable) {
+    alert(`Cannot return more than ${returnable} of "${it.item_name}"`);
+    qty = returnable;
+    input.value = qty;
+  }
+  if (qty < 0) { qty = 0; input.value = 0; }
+
+  // Rebuild the items[] list from all the returnable-qty inputs currently
+  // on screen, so edits (including clearing back to 0) always reconcile.
+  items = [];
+  document.querySelectorAll('#linkedItemsArea input[type="number"]').forEach(inp => {
+    const i = Number(inp.dataset.idx);
+    const q = Number(inp.value) || 0;
+    if (q <= 0) return;
+    const lineItem = linkedInvoice.items[i];
+    const amount = q * lineItem.rate;
+    const gstAmount = amount * (lineItem.gst_rate / 100);
+    items.push({
+      item_id: lineItem.item_id,
+      invoice_item_id: lineItem.id,
+      item_name: lineItem.item_name,
+      qty: q,
+      rate: lineItem.rate,
+      amount,
+      gst_rate: lineItem.gst_rate,
+      gst_amount: gstAmount
+    });
+  });
+
+  renderItemsTable();
+}
+
+/* 🔍 ITEM AUTOCOMPLETE (independent mode) */
+itemSearch.addEventListener("input", async () => {
+  selectedItem = null;
+  const q = itemSearch.value.trim();
+
+  if (q.length < 2) {
+    suggestionsBox.innerHTML = "";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/items/search?q=${q}`);
+  const list = await res.json();
+
+  suggestionsBox.innerHTML = "";
+  list.forEach(item => {
+    const div = document.createElement("div");
+    div.textContent = `${item.item_name} (₹${item.selling_price})`;
+    div.style.padding = "4px";
+    div.style.cursor = "pointer";
+
+    div.onclick = () => {
+      selectedItem = item;
+      itemSearch.value = item.item_name;
+      itemRate.value = item.selling_price || "";
+      if (item.gst_rate !== null && item.gst_rate !== undefined) {
+        const match = [...itemGstRate.options].find(
+          o => Number(o.value) === Number(item.gst_rate)
+        );
+        if (match) itemGstRate.value = match.value;
+      }
+      suggestionsBox.innerHTML = "";
+    };
+
+    suggestionsBox.appendChild(div);
+  });
+});
+
+/* ➕ ADD ITEM (independent mode) */
+function addItem() {
+  const name = itemSearch.value.trim();
+  const qty = Number(itemQty.value);
+  const rate = Number(itemRate.value);
+  const gstRate = Number(itemGstRate.value);
+
+  if (!name) { alert("Item name required"); return; }
+  if (qty <= 0 || rate <= 0) { alert("Invalid qty or rate"); return; }
+
+  const amount = qty * rate;
+  const gstAmount = amount * (gstRate / 100);
+
+  items.push({
+    item_id: selectedItem ? selectedItem.id : null,
+    invoice_item_id: null,
+    item_name: name,
+    qty,
+    rate,
+    amount,
+    gst_rate: gstRate,
+    gst_amount: gstAmount
+  });
+
+  selectedItem = null;
+  itemSearch.value = "";
+  itemQty.value = 1;
+  itemRate.value = "";
+  itemGstRate.value = "18";
+
+  renderItemsTable();
+}
+
+function removeItem(idx) {
+  items.splice(idx, 1);
+  renderItemsTable();
+}
+
+/* 🧮 RENDER ITEMS TABLE + TOTALS */
+function renderItemsTable() {
+  const table = document.getElementById("itemsTable");
+  table.innerHTML = `
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  `;
+
+  items.forEach((item, idx) => {
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${item.item_name}</td>
+      <td class="center">${item.qty}</td>
+      <td class="amount">${item.rate.toFixed(2)}</td>
+      <td class="amount">${item.amount.toFixed(2)}</td>
+      <td class="center">${item.gst_rate}%</td>
+      <td class="amount">${item.gst_amount.toFixed(2)}</td>
+      <td class="amount">${(item.amount + item.gst_amount).toFixed(2)}</td>
+      <td class="center">${item.invoice_item_id ? "" : `<button onclick="removeItem(${idx})">✕</button>`}</td>
+    `;
+  });
+
+  renderTotals();
+}
+
+function renderTotals() {
+  const totalsBox = document.getElementById("totalsBox");
+
+  if (items.length === 0) {
+    totalsBox.innerHTML = "";
+    return;
+  }
+
+  const taxable = items.reduce((s, i) => s + i.amount, 0);
+  const totalGst = items.reduce((s, i) => s + i.gst_amount, 0);
+  const isInter = taxTypeSelect.value === "INTER";
+
+  const igst = isInter ? totalGst : 0;
+  const cgst = isInter ? 0 : totalGst / 2;
+  const sgst = isInter ? 0 : totalGst / 2;
+  const grandTotal = taxable + totalGst;
+
+  totalsBox.innerHTML = `
+    <div>Taxable Amount: ₹${taxable.toFixed(2)}</div>
+    ${isInter
+      ? `<div>IGST: ₹${igst.toFixed(2)}</div>`
+      : `<div>CGST: ₹${cgst.toFixed(2)}</div><div>SGST: ₹${sgst.toFixed(2)}</div>`
+    }
+    <div class="grand">Grand Total: ₹${grandTotal.toFixed(2)}</div>
+  `;
+}
+
+taxTypeSelect.addEventListener("change", renderTotals);
+
+/* 💾 SAVE DEBIT NOTE */
+function saveDebitNote() {
+  const date = document.getElementById("noteDate").value;
+  const supplier = supplierInput.value.trim();
+  const reason = document.getElementById("reason").value.trim();
+  const taxType = taxTypeSelect.value;
+  const adjustsStock = document.getElementById("adjustsStock").checked;
+
+  if (!date || !supplier) { alert("Date and supplier are required"); return; }
+  if (items.length === 0) { alert("Add at least one item"); return; }
+  if (mode === "LINKED" && !linkedInvoice) { alert("Select a purchase invoice to link against, or switch to Independent"); return; }
+
+  fetch(API_BASE_URL + "/debit-note/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date,
+      supplier,
+      supplierId: selectedSupplierId,
+      purchase_invoice_id: mode === "LINKED" ? linkedInvoice.id : null,
+      reason,
+      taxType,
+      adjustsStock,
+      items
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) { alert(data.error); return; }
+    alert(`Debit note saved — ${data.note_no}`);
+    window.location.href = "Debit Note Register.html";
+  })
+  .catch(() => alert("Error saving debit note"));
+}
+</script>
+
+</body>
+</html>

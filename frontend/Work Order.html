@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Work Order</title>
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+input[readonly] {
+  background: #eee;
+}
+
+input:disabled, select:disabled {
+  background: #eee;
+  color: #666;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+#suggestions {
+  border: 1px solid #aaa;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  background: white;
+  z-index: 10;
+  width: 260px;
+}
+#suggestions div {
+  padding: 6px;
+  cursor: pointer;
+}
+#suggestions div:hover {
+  background: #eee;
+}
+
+.item-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+}
+.badge-NEW { background: #0969da; }
+.badge-DRAFT { background: #888; }
+.badge-ISSUED { background: #d18f00; }
+.badge-COMPLETED { background: #1a7f37; }
+.badge-CANCELLED { background: #c00; }
+
+.readonly-note {
+  background: #fff8e1;
+  border: 1px solid #d6a300;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.action-box button {
+  padding: 6px 14px;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-bottom: 6px;
+}
+
+.totals-box {
+  margin-top: 10px;
+  text-align: right;
+}
+.totals-box .grand {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.error-msg {
+  color: #a00;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.qty-input {
+  width: 90px;
+}
+
+.panel {
+  border: 1px dashed #999;
+  padding: 10px;
+  margin-top: 10px;
+  background: #fafafa;
+}
+
+.pending-0 {
+  color: #999;
+}
+
+.batch-entry {
+  min-width: 360px;
+}
+
+.batch-col-labels {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 2px;
+}
+.batch-col-labels span:nth-child(1) { width: 120px; }
+.batch-col-labels span:nth-child(2) { width: 90px; }
+.batch-col-labels span:nth-child(3) { width: 60px; }
+
+.batch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.batch-row .batch-label {
+  width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch-row .expiry-label {
+  width: 90px;
+  font-size: 12px;
+}
+.batch-row .avail-label {
+  width: 60px;
+  font-size: 12px;
+  color: #555;
+}
+.batch-row .qty-input {
+  width: 70px;
+}
+
+.no-stock-msg {
+  color: #a00;
+  font-size: 13px;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Work Order Register.html">⬅ Work Order Register</a>
+<div class="title">Work Order</div>
+
+<div id="readonlyNote" class="readonly-note" style="display:none;"></div>
+
+<!-- 1️⃣ WO HEADER -->
+<div class="section-box">
+  <div class="section-title">Work Order Details</div>
+
+  <label>WO No:
+    <input type="text" id="woNo" readonly style="width:110px;">
+  </label>
+
+  <label>Status:
+    <span id="statusBadge" class="badge badge-NEW">NEW</span>
+  </label>
+
+  <label>Date:
+    <input type="date" id="woDate">
+  </label>
+
+  <br><br>
+
+  <label class="item-wrap">FG / WIP Item:
+    <input type="text" id="fgItemSearch" placeholder="Search finished good / WIP item" autocomplete="off" style="width:260px;">
+    <div id="suggestions"></div>
+  </label>
+
+  <label>Target Qty:
+    <input type="number" id="targetQty" min="0" step="any" style="width:100px;">
+  </label>
+
+  <span id="fgUnitLabel" style="font-size:12px; color:#555;"></span>
+
+  <br><br>
+
+  <label>Issue From:
+    <select id="issueLocation" style="width:160px;"></select>
+  </label>
+
+  <label>Receive Into:
+    <select id="receiveLocation" style="width:160px;"></select>
+  </label>
+
+  <br><br>
+  <label style="margin-right:0;">Narration:
+    <input type="text" id="narration" placeholder="Optional note" style="width:400px;">
+  </label>
+</div>
+
+<!-- 2️⃣ ACTIVE BOM COST PREVIEW -->
+<div class="section-box" id="bomCostBox" style="display:none;">
+  <div class="section-title">Active BOM Cost (live rates)</div>
+  <div id="bomCostLine"></div>
+</div>
+
+<!-- 3️⃣ REQUIRED COMPONENTS -->
+<div class="section-box">
+  <div class="section-title">Required Components</div>
+
+  <table id="componentsTable">
+    <tr>
+      <th>Component</th>
+      <th>Qty per Unit</th>
+      <th>Unit</th>
+      <th>Required</th>
+      <th>Issued</th>
+      <th>Pending</th>
+    </tr>
+  </table>
+  <div id="noComponentsMsg" style="text-align:center; padding:10px; color:#666;">
+    Select an FG/WIP item and enter a target qty to explode its active BOM.
+  </div>
+</div>
+
+<!-- 4️⃣ ACTIONS -->
+<div class="section-box action-box">
+  <button id="saveDraftBtn" onclick="saveDraft()">💾 Save Draft</button>
+  <button id="issueBtn" onclick="toggleIssuePanel()" style="display:none;">📤 Issue</button>
+  <button id="completeBtn" onclick="toggleCompletePanel()" style="display:none;">✅ Complete</button>
+  <button id="scrapBtn" onclick="toggleScrapPanel()" style="display:none;">🗑️ Scrap / Reject</button>
+  <button id="cancelBtn" onclick="cancelWO()" style="display:none;">✕ Cancel</button>
+  <div id="errorMsg" class="error-msg"></div>
+
+  <!-- ISSUE PANEL -->
+  <div id="issuePanel" class="panel" style="display:none;">
+    <div class="section-title">Issue Raw Material (partial issue allowed)</div>
+    <label>Issue Date:
+      <input type="date" id="issueDate">
+    </label>
+    <table id="issueTable">
+      <tr>
+        <th>Component</th>
+        <th>Required</th>
+        <th>Already Issued</th>
+        <th>Pending</th>
+        <th>Issue Now (Batch / Expiry / Avail / Qty)</th>
+      </tr>
+    </table>
+    <div style="margin-top:10px;">
+      <button onclick="submitIssue()">✅ Confirm Issue</button>
+      <button onclick="toggleIssuePanel()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- COMPLETE PANEL -->
+  <div id="completePanel" class="panel" style="display:none;">
+    <div class="section-title">Complete Finished Goods</div>
+    <label>Completion Date:
+      <input type="date" id="completeDate">
+    </label>
+    <label>Completed Qty:
+      <input type="number" id="completedQty" min="0" step="any" class="qty-input">
+    </label>
+    <button onclick="previewComplete()">📊 Preview Cost</button>
+
+    <div id="completePreviewBox" style="display:none; margin-top:10px;">
+      <table id="completePreviewTable">
+        <tr>
+          <th>Component</th>
+          <th>Qty Consumed</th>
+          <th>Rate</th>
+          <th>Line Cost</th>
+          <th>Batches (FEFO)</th>
+        </tr>
+      </table>
+      <div class="totals-box">
+        <div>Total Cost: ₹<span id="previewTotalCost"></span></div>
+        <div class="grand">Cost per Unit: ₹<span id="previewFgRate"></span></div>
+        <div>FG Batch (on confirm): <b id="previewFgBatchNo"></b></div>
+      </div>
+      <div style="margin-top:10px;">
+        <button onclick="confirmComplete()">✅ Confirm Complete</button>
+        <button onclick="toggleCompletePanel()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRAP / REJECT PANEL (Scrap & Reorder Alerts, Step 4) -->
+  <div id="scrapPanel" class="panel" style="display:none;">
+    <div class="section-title">Scrap / Reject</div>
+    <label>Scrap Date:
+      <input type="date" id="scrapDate">
+    </label>
+    <label style="margin-left:15px;">Reason:
+      <input type="text" id="scrapReason" placeholder="e.g. QC rejected, spoiled, damaged" style="width:280px;">
+    </label>
+
+    <table id="scrapTable">
+      <tr>
+        <th>Item</th>
+        <th>Available (Batch / Expiry / Avail)</th>
+        <th>Qty to Scrap</th>
+        <th>Rate (₹)</th>
+        <th></th>
+      </tr>
+    </table>
+    <div id="noScrapItemsMsg" style="text-align:center; padding:10px; color:#666; display:none;">
+      Nothing available to scrap yet — issue material and/or complete some FG first.
+    </div>
+
+    <div style="margin-top:10px;">
+      <button onclick="toggleScrapPanel()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- 5️⃣ FG BATCHES PRODUCED (Batch Tracking, Step 8) -->
+<div class="section-box" id="fgBatchesBox" style="display:none;">
+  <div class="section-title">FG Batches Produced</div>
+  <table id="fgBatchesTable">
+    <tr>
+      <th>FG Batch No</th>
+      <th>Date</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Component Batches Consumed</th>
+    </tr>
+  </table>
+</div>
+
+<!-- 6️⃣ SCRAP / WASTAGE HISTORY (Scrap & Reorder Alerts, Step 5) -->
+<div class="section-box" id="scrapHistoryBox" style="display:none;">
+  <div class="section-title">Scrap / Wastage History</div>
+  <table id="scrapHistoryTable">
+    <tr>
+      <th>Item</th>
+      <th>Unit</th>
+      <th>Qty Scrapped</th>
+      <th>Value (₹)</th>
+    </tr>
+  </table>
+  <div class="totals-box">
+    <div class="grand">Total Scrapped: ₹<span id="scrapHistoryTotalValue"></span></div>
+  </div>
+</div>
+
+<script>
+let currentWoId = null;       // null until Save Draft
+let currentStatus = "NEW";    // NEW | DRAFT | ISSUED | COMPLETED | CANCELLED
+let selectedFgItem = null;    // { id, item_name, unit }
+let requiredComponents = [];  // preview (NEW) or actual (saved WO) component lines
+let woData = null;            // full GET /work-order/:id payload once saved
+
+const fgItemSearch = document.getElementById("fgItemSearch");
+const suggestionsBox = document.getElementById("suggestions");
+const targetQtyInput = document.getElementById("targetQty");
+const componentsTable = document.getElementById("componentsTable");
+const noComponentsMsg = document.getElementById("noComponentsMsg");
+const statusBadge = document.getElementById("statusBadge");
+const readonlyNote = document.getElementById("readonlyNote");
+const errorMsg = document.getElementById("errorMsg");
+const saveDraftBtn = document.getElementById("saveDraftBtn");
+const issueBtn = document.getElementById("issueBtn");
+const completeBtn = document.getElementById("completeBtn");
+const scrapBtn = document.getElementById("scrapBtn");
+const cancelBtn = document.getElementById("cancelBtn");
+const issuePanel = document.getElementById("issuePanel");
+const completePanel = document.getElementById("completePanel");
+const scrapPanel = document.getElementById("scrapPanel");
+const bomCostBox = document.getElementById("bomCostBox");
+const bomCostLine = document.getElementById("bomCostLine");
+let lastPreview = null; // holds the /complete?preview=true response until confirmed
+let allLocationsList = []; // cached /locations?active=1 response — the Scrap
+                            // panel (Step 4) needs Shop Floor's id to fetch a
+                            // component's batches, same lookup-by-name the
+                            // rest of this screen already does for RM/FG Store.
+
+window.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("woDate").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("issueDate").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("completeDate").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("scrapDate").value = new Date().toISOString().slice(0, 10);
+
+  await loadLocations();
+
+  const params = new URLSearchParams(window.location.search);
+  const woId = params.get("wo_id");
+
+  if (woId) {
+    await loadWO(woId);
+  } else {
+    setStatus("NEW");
+  }
+});
+
+/* Locations dropdowns — same "load /locations?active=1, default by name"
+   pattern Goods Receipt uses for its Receive Into dropdown. */
+async function loadLocations() {
+  const res = await fetch(API_BASE_URL + "/locations?active=1");
+  const locations = await res.json();
+  allLocationsList = locations;
+
+  const issueSel = document.getElementById("issueLocation");
+  const receiveSel = document.getElementById("receiveLocation");
+  const options = locations.map(l => `<option value="${l.id}">${l.location_name}</option>`).join("");
+  issueSel.innerHTML = options;
+  receiveSel.innerHTML = options;
+
+  const rmStore = locations.find(l => l.location_name === "RM Store");
+  if (rmStore) issueSel.value = rmStore.id;
+  const fgStore = locations.find(l => l.location_name === "FG Store");
+  if (fgStore) receiveSel.value = fgStore.id;
+}
+
+/* 🔍 FG / WIP ITEM AUTOCOMPLETE — same client-side item_type filter the
+   BOM screen uses. Only usable while composing a brand-new WO; once a
+   wo_id is loaded the FG item and target qty are fixed (there's no update
+   endpoint for either — target qty is frozen the moment the component
+   snapshot is taken). */
+fgItemSearch.addEventListener("input", async () => {
+  selectedFgItem = null;
+  const q = fgItemSearch.value.trim();
+
+  if (q.length < 2) {
+    suggestionsBox.innerHTML = "";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/items/search?q=${encodeURIComponent(q)}`);
+  const list = (await res.json()).filter(
+    item => item.item_type === "FINISHED_GOOD" || item.item_type === "WIP"
+  );
+
+  suggestionsBox.innerHTML = "";
+  list.forEach(item => {
+    const div = document.createElement("div");
+    div.textContent = `${item.item_name} (${item.item_type === "WIP" ? "WIP" : "FG"}, ${item.unit})`;
+    div.onclick = () => {
+      selectedFgItem = item;
+      fgItemSearch.value = item.item_name;
+      document.getElementById("fgUnitLabel").textContent = `Unit: ${item.unit}`;
+      suggestionsBox.innerHTML = "";
+      loadBomCostPreview();
+      explodePreview();
+    };
+    suggestionsBox.appendChild(div);
+  });
+});
+
+document.addEventListener("click", (e) => {
+  if (!suggestionsBox.contains(e.target) && e.target !== fgItemSearch) {
+    suggestionsBox.innerHTML = "";
+  }
+});
+
+targetQtyInput.addEventListener("input", () => {
+  if (currentStatus === "NEW") explodePreview();
+});
+
+/* 📊 BOM COST PREVIEW — GET /bom/cost/by-item/:fgItemId, the same live
+   standard-costing rollup the BOM screen's "View BOM Cost" uses, just
+   fetched as soon as an FG is picked rather than on a button click. Also
+   doubles as the source of qty_per_unit/current_rate for the required-
+   components explosion below, so the WO screen never has to know
+   explodeBOMForQuantity's math itself — it just scales this response by
+   target qty. */
+let activeBomCost = null; // cached response of /bom/cost/by-item/:fgItemId
+
+async function loadBomCostPreview() {
+  activeBomCost = null;
+  bomCostBox.style.display = "none";
+  if (!selectedFgItem) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/bom/cost/by-item/${selectedFgItem.id}`);
+    const data = await res.json();
+    if (data.error) {
+      errorMsg.textContent = data.error;
+      return;
+    }
+    activeBomCost = data;
+    bomCostLine.textContent =
+      `Cost per ${data.fg_unit}: ₹${Number(data.total_cost_per_unit).toFixed(2)} (BOM ${data.bom_no}, v${data.version})`;
+    bomCostBox.style.display = "block";
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/* Explodes the cached BOM cost response by the entered target qty — the
+   same qty_per_unit × targetQty math explodeBOMForQuantity (Step 2) does
+   server-side — purely for a live read-only preview before Save Draft.
+   Once the WO is actually saved, the real snapshot (with real
+   required_qty/issued_qty) takes over via renderSavedComponents. */
+function explodePreview() {
+  errorMsg.textContent = "";
+  const targetQty = Number(targetQtyInput.value);
+
+  if (!activeBomCost || !targetQty || targetQty <= 0) {
+    requiredComponents = [];
+    renderPreviewComponents();
+    return;
+  }
+
+  requiredComponents = (activeBomCost.components || []).map(c => ({
+    component_item_name: c.component_item_name,
+    qty_per_unit: c.qty_per_unit,
+    unit: c.unit,
+    required_qty: c.qty_per_unit * targetQty
+  }));
+  renderPreviewComponents();
+}
+
+function renderPreviewComponents() {
+  componentsTable.innerHTML = `
+    <tr>
+      <th>Component</th>
+      <th>Qty per Unit</th>
+      <th>Unit</th>
+      <th>Required</th>
+      <th>Issued</th>
+      <th>Pending</th>
+    </tr>
+  `;
+
+  requiredComponents.forEach(c => {
+    const row = componentsTable.insertRow();
+    row.innerHTML = `
+      <td>${c.component_item_name}</td>
+      <td class="center">${c.qty_per_unit}</td>
+      <td class="center">${c.unit || ""}</td>
+      <td class="center">${Number(c.required_qty).toFixed(4).replace(/\.?0+$/, "")}</td>
+      <td class="center">—</td>
+      <td class="center">—</td>
+    `;
+  });
+
+  noComponentsMsg.style.display = requiredComponents.length ? "none" : "block";
+}
+
+/* Renders the REAL component snapshot once a WO is saved — required_qty
+   and issued_qty come straight from work_order_components (via
+   GET /work-order/:id), not recomputed client-side. */
+function renderSavedComponents() {
+  componentsTable.innerHTML = `
+    <tr>
+      <th>Component</th>
+      <th>Qty per Unit</th>
+      <th>Unit</th>
+      <th>Required</th>
+      <th>Issued</th>
+      <th>Pending</th>
+    </tr>
+  `;
+
+  const items = woData.items || [];
+  items.forEach(it => {
+    const pending = it.required_qty - it.issued_qty;
+    const row = componentsTable.insertRow();
+    row.innerHTML = `
+      <td>${it.component_item_name}</td>
+      <td class="center">${it.qty_per_unit}</td>
+      <td class="center">${it.unit || it.component_unit || ""}</td>
+      <td class="center">${it.required_qty}</td>
+      <td class="center">${it.issued_qty}</td>
+      <td class="center ${pending <= 0 ? "pending-0" : ""}">${pending}</td>
+    `;
+  });
+
+  noComponentsMsg.style.display = items.length ? "none" : "block";
+}
+
+/* 💾 SAVE DRAFT — POST /work-order/create. Only available while NEW —
+   there's no update endpoint for a WO's header/components once created
+   (unlike BOM's PUT /bom/:id), so this button disappears entirely once a
+   wo_id exists. */
+async function saveDraft() {
+  errorMsg.textContent = "";
+
+  if (!validateBeforeSave()) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/work-order/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fgItemId: selectedFgItem.id,
+        targetQty: Number(targetQtyInput.value),
+        date: document.getElementById("woDate").value,
+        locations: {
+          issue_location_id: document.getElementById("issueLocation").value || null,
+          receive_location_id: document.getElementById("receiveLocation").value || null
+        },
+        narration: document.getElementById("narration").value.trim() || null
+      })
+    });
+    const data = await res.json();
+    if (data.error) { errorMsg.textContent = data.error; return; }
+
+    history.replaceState(null, "", `Work Order.html?wo_id=${data.id}`);
+    await loadWO(data.id);
+    alert(`Work Order ${data.wo_no} saved as DRAFT`);
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error saving Work Order";
+  }
+}
+
+function validateBeforeSave() {
+  if (!selectedFgItem) {
+    errorMsg.textContent = "Select an FG/WIP item from the suggestions list";
+    return false;
+  }
+  const targetQty = Number(targetQtyInput.value);
+  if (!targetQty || targetQty <= 0) {
+    errorMsg.textContent = "Enter a target qty greater than zero";
+    return false;
+  }
+  if (!document.getElementById("woDate").value) {
+    errorMsg.textContent = "Date is required";
+    return false;
+  }
+  return true;
+}
+
+/* Loads an existing Work Order for viewing/acting on. */
+async function loadWO(woId) {
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${woId}`);
+    const data = await res.json();
+    if (data.error) {
+      errorMsg.textContent = data.error;
+      return;
+    }
+
+    woData = data;
+    currentWoId = data.id;
+
+    document.getElementById("woNo").value = data.wo_no;
+    document.getElementById("woDate").value = data.date;
+    selectedFgItem = { id: data.fg_item_id, item_name: data.fg_item_name, unit: data.fg_unit };
+    fgItemSearch.value = data.fg_item_name;
+    document.getElementById("fgUnitLabel").textContent = `Unit: ${data.fg_unit}`;
+    targetQtyInput.value = data.target_qty;
+    document.getElementById("issueLocation").value = data.issue_location_id || "";
+    document.getElementById("receiveLocation").value = data.receive_location_id || "";
+    document.getElementById("narration").value = data.narration || "";
+
+    renderSavedComponents();
+    setStatus(data.status);
+    loadFgBatches();
+    loadScrapHistory();
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error loading Work Order";
+  }
+}
+
+/* Applies the read/write rules for a given status. */
+function setStatus(status) {
+  currentStatus = status;
+  statusBadge.textContent = status;
+  statusBadge.className = `badge badge-${status}`;
+
+  const isNew = status === "NEW";
+  const isDraft = status === "DRAFT";
+  const isIssued = status === "ISSUED";
+  const isLocked = status === "COMPLETED" || status === "CANCELLED";
+
+  fgItemSearch.disabled = !isNew;
+  targetQtyInput.disabled = !isNew;
+  document.getElementById("issueLocation").disabled = !isNew;
+  document.getElementById("receiveLocation").disabled = !isNew;
+  document.getElementById("narration").disabled = !isNew;
+
+  // Scrap & Reorder Alerts, Step 4: unlike Issue/Complete, scrap stays
+  // available once a WO is COMPLETED too — rejecting a finished unit, or
+  // writing off leftover issued material, is a real thing that happens
+  // after production wraps up. Same "blocked only against CANCELLED"
+  // guardrail POST /work-order/:id/scrap (Step 3) already enforces
+  // server-side; this just mirrors it in the UI so the button doesn't
+  // dangle for a state the backend would reject anyway.
+  const canScrap = isDraft || isIssued || status === "COMPLETED";
+
+  saveDraftBtn.style.display = isNew ? "inline-block" : "none";
+  issueBtn.style.display = (isDraft || isIssued) ? "inline-block" : "none";
+  completeBtn.style.display = (isDraft || isIssued) ? "inline-block" : "none";
+  scrapBtn.style.display = canScrap ? "inline-block" : "none";
+  cancelBtn.style.display = isDraft ? "inline-block" : "none";
+
+  if (!isDraft && !isIssued) {
+    issuePanel.style.display = "none";
+    completePanel.style.display = "none";
+  }
+  if (!canScrap) {
+    scrapPanel.style.display = "none";
+  }
+
+  if (status === "COMPLETED") {
+    readonlyNote.style.display = "block";
+    readonlyNote.textContent = "This Work Order is COMPLETED — target qty has been fully produced.";
+  } else if (status === "CANCELLED") {
+    readonlyNote.style.display = "block";
+    readonlyNote.textContent = "This Work Order was CANCELLED before anything was issued.";
+  } else {
+    readonlyNote.style.display = "none";
+  }
+
+  if (!isNew) loadBomCostPreview();
+}
+
+/* -------------------- ISSUE PANEL -------------------- */
+
+function toggleIssuePanel() {
+  errorMsg.textContent = "";
+  completePanel.style.display = "none";
+  scrapPanel.style.display = "none";
+
+  if (issuePanel.style.display === "block") {
+    issuePanel.style.display = "none";
+    return;
+  }
+
+  issuePanel.style.display = "block";
+  renderIssueTable();
+}
+
+// Greedily allocates `pending` across `batches` (already FEFO-sorted by the
+// backend — earliest expiry first, un-batched stock last) so the earliest-
+// expiring stock is used up first by default. Returns one allocated qty per
+// batch, capped at that batch's own available qty. The user can freely
+// override any of these before submitting — this just seeds a sensible
+// starting point, same "default, human overrides" spirit as GRN's
+// auto-generated batch numbers (Step 4) and resolveLocationId.
+function allocateFEFO(batches, pending) {
+  let remaining = pending;
+  return batches.map(b => {
+    const avail = Number(b.available) || 0;
+    const alloc = Math.min(avail, Math.max(remaining, 0));
+    remaining -= alloc;
+    return alloc;
+  });
+}
+
+// Batch Tracking Step 6: rebuilds the Issue Now column as a per-component
+// batch picker instead of one free-entry qty box — for each component,
+// fetches its available batches at the issue location (qty + expiry) via
+// Step 6's new /stock/:itemId/batches endpoint, and shows one row per
+// batch with an editable qty input, defaulted via FEFO allocation above.
+async function renderIssueTable() {
+  const table = document.getElementById("issueTable");
+  table.innerHTML = `
+    <tr>
+      <th>Component</th>
+      <th>Required</th>
+      <th>Already Issued</th>
+      <th>Pending</th>
+      <th>Issue Now (Batch / Expiry / Avail / Qty)</th>
+    </tr>
+  `;
+
+  const issueLocationId = document.getElementById("issueLocation").value || woData.issue_location_id;
+  const items = woData.items || [];
+
+  // Fetch every component's batch list up front so rows render together
+  // rather than popping in one at a time.
+  const batchLists = await Promise.all(
+    items.map(it => {
+      const pending = it.required_qty - it.issued_qty;
+      if (pending <= 0 || !issueLocationId) return Promise.resolve([]);
+      return fetch(API_BASE_URL + `/stock/${it.component_item_id}/batches?location_id=${issueLocationId}`)
+        .then(res => res.json())
+        .then(rows => (Array.isArray(rows) ? rows : []))
+        .catch(() => []);
+    })
+  );
+
+  items.forEach((it, idx) => {
+    const pending = it.required_qty - it.issued_qty;
+    const batches = batchLists[idx];
+    const row = table.insertRow();
+
+    let cellHtml;
+    if (pending <= 0) {
+      cellHtml = `<span class="center">—</span>`;
+    } else if (!batches.length) {
+      cellHtml = `<span class="no-stock-msg">No stock available at issue location</span>`;
+    } else {
+      const allocations = allocateFEFO(batches, pending);
+      cellHtml = `
+        <div class="batch-entry" data-component-item-id="${it.component_item_id}" data-pending="${pending}">
+          <div class="batch-col-labels"><span>Batch</span><span>Expiry</span><span>Avail</span></div>
+          <div class="batch-rows">
+            ${batches.map((b, i) => `
+              <div class="batch-row" data-batch-no="${b.batch_no ?? ""}" data-available="${b.available}">
+                <span class="batch-label">${b.batch_no ?? "No Batch"}</span>
+                <span class="expiry-label">${b.expiry_date || "—"}</span>
+                <span class="avail-label">${b.available}</span>
+                <input type="number" class="qty-input" min="0" max="${b.available}" step="any"
+                       value="${allocations[i] > 0 ? allocations[i] : 0}">
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    row.innerHTML = `
+      <td>${it.component_item_name}</td>
+      <td class="center">${it.required_qty}</td>
+      <td class="center">${it.issued_qty}</td>
+      <td class="center">${pending}</td>
+      <td>${cellHtml}</td>
+    `;
+  });
+}
+
+async function submitIssue() {
+  errorMsg.textContent = "";
+  const date = document.getElementById("issueDate").value;
+  if (!date) { errorMsg.textContent = "Issue date is required"; return; }
+
+  // Batch Tracking Step 6: each component's batch rows (qty per batch_no)
+  // roll up into { component_item_id, batches: [{batch_no, qty}, ...] },
+  // matching Step 5's batch-aware payload shape.
+  const containers = document.querySelectorAll("#issueTable .batch-entry");
+  const lines = [];
+
+  for (const container of containers) {
+    const componentItemId = Number(container.dataset.componentItemId);
+    const pending = Number(container.dataset.pending);
+    const rows = container.querySelectorAll(".batch-row");
+
+    const batches = [];
+    let lineQty = 0;
+
+    for (const row of rows) {
+      const qty = Number(row.querySelector(".qty-input").value) || 0;
+      if (qty <= 0) continue;
+
+      const available = Number(row.dataset.available);
+      if (qty > available + 1e-6) {
+        errorMsg.textContent = "Issue quantity cannot exceed the available batch quantity";
+        return;
+      }
+
+      const batchNo = row.dataset.batchNo || null;
+      batches.push({ batch_no: batchNo, qty });
+      lineQty += qty;
+    }
+
+    if (lineQty <= 0) continue;
+
+    if (lineQty > pending + 1e-6) {
+      errorMsg.textContent = "Issue quantity cannot exceed the pending quantity";
+      return;
+    }
+
+    lines.push({ component_item_id: componentItemId, batches });
+  }
+
+  if (!lines.length) {
+    errorMsg.textContent = "Enter at least one quantity to issue";
+    return;
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/issue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, lines })
+    });
+    const data = await res.json();
+    if (data.error) { errorMsg.textContent = data.error; return; }
+
+    issuePanel.style.display = "none";
+    await loadWO(currentWoId);
+    alert("Raw material issued successfully");
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error issuing raw material";
+  }
+}
+
+/* -------------------- COMPLETE PANEL -------------------- */
+
+function toggleCompletePanel() {
+  errorMsg.textContent = "";
+  issuePanel.style.display = "none";
+  scrapPanel.style.display = "none";
+  document.getElementById("completePreviewBox").style.display = "none";
+  lastPreview = null;
+
+  completePanel.style.display = completePanel.style.display === "block" ? "none" : "block";
+}
+
+/* 📊 PREVIEW COST — POST /work-order/:id/complete with preview:true, the
+   exact same guardrail + costing logic the real completion runs, just
+   without writing anything. Shows the computed cost/unit before the user
+   commits to it. */
+async function previewComplete() {
+  errorMsg.textContent = "";
+  const date = document.getElementById("completeDate").value;
+  const qty = Number(document.getElementById("completedQty").value);
+
+  if (!date) { errorMsg.textContent = "Completion date is required"; return; }
+  if (!qty || qty <= 0) { errorMsg.textContent = "Enter a completed qty greater than zero"; return; }
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, completedQty: qty, preview: true })
+    });
+    const data = await res.json();
+    if (data.error) {
+      errorMsg.textContent = data.error;
+      document.getElementById("completePreviewBox").style.display = "none";
+      return;
+    }
+
+    lastPreview = data;
+
+    const table = document.getElementById("completePreviewTable");
+    table.innerHTML = `
+      <tr>
+        <th>Component</th>
+        <th>Qty Consumed</th>
+        <th>Rate</th>
+        <th>Line Cost</th>
+        <th>Batches (FEFO)</th>
+      </tr>
+    `;
+    (data.components || []).forEach(c => {
+      const row = table.insertRow();
+      // Batch Tracking Step 7 already returns a per-batch FEFO allocation
+      // for every component line (c.batches) — Step 8 just surfaces it here
+      // so the user can see which batches this completion will draw down
+      // before confirming, same spirit as the Issue panel's batch picker.
+      const batchesLabel = (c.batches || [])
+        .map(b => `${b.batch_no || "(no batch)"}: ${Number(b.qty).toFixed(4).replace(/\.?0+$/, "")}`)
+        .join(", ");
+      row.innerHTML = `
+        <td>${c.component_item_name}</td>
+        <td class="center">${Number(c.qty).toFixed(4).replace(/\.?0+$/, "")}</td>
+        <td class="amount">₹${Number(c.rate).toFixed(2)}</td>
+        <td class="amount">₹${Number(c.line_cost).toFixed(2)}</td>
+        <td style="font-size:12px;">${batchesLabel}</td>
+      `;
+    });
+
+    document.getElementById("previewTotalCost").textContent = Number(data.total_cost).toFixed(2);
+    document.getElementById("previewFgRate").textContent = Number(data.fg_rate).toFixed(2);
+    document.getElementById("previewFgBatchNo").textContent = data.fg_batch_no || "";
+    document.getElementById("completePreviewBox").style.display = "block";
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error previewing completion cost";
+  }
+}
+
+/* ✅ CONFIRM COMPLETE — re-sends the exact same request without the
+   preview flag. Re-reads date/qty from the form rather than trusting
+   lastPreview's inputs, in case the user tweaked them after previewing;
+   if they did, the numbers just won't match what's shown until they
+   preview again — the backend re-validates and re-prices regardless. */
+async function confirmComplete() {
+  errorMsg.textContent = "";
+  const date = document.getElementById("completeDate").value;
+  const qty = Number(document.getElementById("completedQty").value);
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, completedQty: qty })
+    });
+    const data = await res.json();
+    if (data.error) { errorMsg.textContent = data.error; return; }
+
+    completePanel.style.display = "none";
+    document.getElementById("completePreviewBox").style.display = "none";
+    await loadWO(currentWoId);
+    alert(`Completed ${qty} at ₹${Number(data.fg_rate).toFixed(2)}/unit — FG Batch: ${data.fg_batch_no}`);
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error completing Work Order";
+  }
+}
+
+/* -------------------- SCRAP / REJECT PANEL (Scrap & Reorder Alerts, Step 4) --------------------
+   Lists one row per item this WO could plausibly scrap — the FG itself,
+   plus every BOM component — each showing its current available qty/
+   batches at whichever location POST /work-order/:id/scrap (Step 3) would
+   actually debit: FG Store (the WO's own receive_location_id) for the FG,
+   Shop Floor for every component. Reuses the Issue panel's batch-
+   availability rendering (Step 6) for the display — same batch/expiry/
+   avail table shape — but there's no per-batch qty input here: Step 3's
+   endpoint takes a single total qty for the item and FEFO-allocates the
+   actual batches itself server-side, so this table is read-only context
+   (what's really sitting there to scrap) with one free qty/rate box and
+   its own "Scrap" button per row, rather than a bulk multi-line submit
+   like Issue's. Reason is a single field shared across whichever row gets
+   submitted, since it's a note on the posting, not a per-batch attribute. */
+
+function toggleScrapPanel() {
+  errorMsg.textContent = "";
+  issuePanel.style.display = "none";
+  completePanel.style.display = "none";
+
+  if (scrapPanel.style.display === "block") {
+    scrapPanel.style.display = "none";
+    return;
+  }
+
+  scrapPanel.style.display = "block";
+  renderScrapTable();
+}
+
+async function renderScrapTable() {
+  const table = document.getElementById("scrapTable");
+  table.innerHTML = `
+    <tr>
+      <th>Item</th>
+      <th>Available (Batch / Expiry / Avail)</th>
+      <th>Qty to Scrap</th>
+      <th>Rate (₹)</th>
+      <th></th>
+    </tr>
+  `;
+
+  const shopFloor = allLocationsList.find(l => l.location_name === "Shop Floor");
+  const shopFloorId = shopFloor ? shopFloor.id : null;
+
+  // Row 0 is always the FG itself; the rest are every component off this
+  // WO's own frozen snapshot (woData.items) — the same universe Step 3's
+  // endpoint validates item_id against.
+  const rows = [
+    {
+      item_id: woData.fg_item_id,
+      item_name: woData.fg_item_name,
+      is_fg: true,
+      location_id: woData.receive_location_id
+    },
+    ...(woData.items || []).map(it => ({
+      item_id: it.component_item_id,
+      item_name: it.component_item_name,
+      is_fg: false,
+      location_id: shopFloorId
+    }))
+  ];
+
+  const batchLists = await Promise.all(
+    rows.map(r => {
+      if (!r.location_id) return Promise.resolve([]);
+      return fetch(API_BASE_URL + `/stock/${r.item_id}/batches?location_id=${r.location_id}`)
+        .then(res => res.json())
+        .then(list => (Array.isArray(list) ? list : []))
+        .catch(() => []);
+    })
+  );
+
+  let anyAvailable = false;
+
+  rows.forEach((r, idx) => {
+    const batches = batchLists[idx];
+    const totalAvailable = batches.reduce((sum, b) => sum + (Number(b.available) || 0), 0);
+    if (totalAvailable > 0) anyAvailable = true;
+
+    let batchHtml;
+    if (!batches.length) {
+      batchHtml = `<span class="no-stock-msg">Nothing available to scrap</span>`;
+    } else {
+      batchHtml = `
+        <div class="batch-entry">
+          <div class="batch-col-labels"><span>Batch</span><span>Expiry</span><span>Avail</span></div>
+          <div class="batch-rows">
+            ${batches.map(b => `
+              <div class="batch-row">
+                <span class="batch-label">${b.batch_no ?? "No Batch"}</span>
+                <span class="expiry-label">${b.expiry_date || "—"}</span>
+                <span class="avail-label">${b.available}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${r.item_name}${r.is_fg ? ` <span style="font-size:11px; color:#0969da;">(FG)</span>` : ""}</td>
+      <td>${batchHtml}</td>
+      <td><input type="number" class="qty-input scrap-qty" min="0" max="${totalAvailable}" step="any" ${totalAvailable ? "" : "disabled"}></td>
+      <td><input type="number" class="qty-input scrap-rate" min="0" step="any" value="0" ${totalAvailable ? "" : "disabled"}></td>
+      <td><button ${totalAvailable ? "" : "disabled"} onclick="submitScrapRow(${r.item_id}, ${totalAvailable}, this)">🗑️ Scrap</button></td>
+    `;
+  });
+
+  document.getElementById("noScrapItemsMsg").style.display = anyAvailable ? "none" : "block";
+}
+
+/* Posts a single item's scrap entry — reads qty/rate off the row the
+   "Scrap" button belongs to, plus the shared date/reason fields, and calls
+   Step 3's endpoint directly with a total qty (no batch breakdown; the
+   backend FEFO-allocates that itself). On success, re-renders the table so
+   the batch/available figures reflect the posting immediately, letting the
+   user scrap another item (or another qty of the same item) without
+   reopening the panel. */
+async function submitScrapRow(itemId, maxAvailable, btn) {
+  errorMsg.textContent = "";
+  const date = document.getElementById("scrapDate").value;
+  const reason = document.getElementById("scrapReason").value.trim();
+  const row = btn.closest("tr");
+  const qty = Number(row.querySelector(".scrap-qty").value) || 0;
+  const rate = Number(row.querySelector(".scrap-rate").value) || 0;
+
+  if (!date) { errorMsg.textContent = "Scrap date is required"; return; }
+  if (!qty || qty <= 0) { errorMsg.textContent = "Enter a scrap qty greater than zero"; return; }
+  if (qty > maxAvailable + 1e-6) {
+    errorMsg.textContent = "Scrap quantity cannot exceed the available quantity";
+    return;
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/scrap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item_id: itemId, qty, rate, date, narration: reason || null })
+    });
+    const data = await res.json();
+    if (data.error) { errorMsg.textContent = data.error; return; }
+
+    await renderScrapTable();
+    await loadScrapHistory();
+    alert(`Scrapped ${qty} — posted to Scrap location`);
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error posting scrap entry";
+  }
+}
+
+/* -------------------- SCRAP / WASTAGE HISTORY (Scrap & Reorder Alerts, Step 5) --------------------
+   GET /work-order/:id/scrap — this WO's cumulative scrap postings, one
+   row per item (qty + value), straight off Step 5's endpoint rather than
+   re-deriving it from stock_ledger. Loaded whenever a saved WO is loaded
+   (same as loadFgBatches, read-only history that doesn't depend on panel
+   state), and again right after a scrap posting succeeds so the totals
+   update immediately without needing a page reload. Hidden entirely when
+   nothing's been scrapped yet — same "don't clutter when there's nothing
+   to show" convention the low-stock widget (Step 9) will also follow. */
+async function loadScrapHistory() {
+  const box = document.getElementById("scrapHistoryBox");
+  if (!currentWoId) { box.style.display = "none"; return; }
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/scrap`);
+    const data = await res.json();
+    if (data.error || !(data.items || []).length) { box.style.display = "none"; return; }
+
+    const table = document.getElementById("scrapHistoryTable");
+    table.innerHTML = `
+      <tr>
+        <th>Item</th>
+        <th>Unit</th>
+        <th>Qty Scrapped</th>
+        <th>Value (₹)</th>
+      </tr>
+    `;
+    data.items.forEach(r => {
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td>${r.item_name}</td>
+        <td class="center">${r.unit}</td>
+        <td class="center">${Number(r.qty).toFixed(4).replace(/\.?0+$/, "")}</td>
+        <td class="amount">₹${Number(r.value).toFixed(2)}</td>
+      `;
+    });
+    document.getElementById("scrapHistoryTotalValue").textContent = Number(data.total_value).toFixed(2);
+    box.style.display = "block";
+  } catch (err) {
+    console.error(err);
+    box.style.display = "none";
+  }
+}
+
+/* -------------------- FG BATCHES PRODUCED (Batch Tracking, Step 8) --------------------
+   GET /work-order/:id/fg-batches — every FG batch this WO has completed so
+   far, plus (per batch) the component-batch breakdown from batch_genealogy.
+   Loaded whenever a saved WO is loaded, same as loadBomCostPreview, since
+   this is read-only history and doesn't depend on current panel state. */
+async function loadFgBatches() {
+  const box = document.getElementById("fgBatchesBox");
+  if (!currentWoId) { box.style.display = "none"; return; }
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/fg-batches`);
+    const data = await res.json();
+    if (data.error || !(data.batches || []).length) { box.style.display = "none"; return; }
+
+    const table = document.getElementById("fgBatchesTable");
+    table.innerHTML = `
+      <tr>
+        <th>FG Batch No</th>
+        <th>Date</th>
+        <th>Qty</th>
+        <th>Rate</th>
+        <th>Component Batches Consumed</th>
+      </tr>
+    `;
+    data.batches.forEach(b => {
+      const compLabel = (b.components || [])
+        .map(c => `${c.component_item_name} (${c.component_batch_no || "no batch"}: ${Number(c.qty).toFixed(4).replace(/\.?0+$/, "")})`)
+        .join(", ");
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td>${b.fg_batch_no}</td>
+        <td class="center">${b.date}</td>
+        <td class="center">${Number(b.qty).toFixed(4).replace(/\.?0+$/, "")}</td>
+        <td class="amount">₹${Number(b.rate).toFixed(2)}</td>
+        <td style="font-size:12px;">${compLabel}</td>
+      `;
+    });
+    box.style.display = "block";
+  } catch (err) {
+    console.error(err);
+    box.style.display = "none";
+  }
+}
+
+/* -------------------- CANCEL -------------------- */
+
+async function cancelWO() {
+  if (!confirm("Cancel this Work Order? This only works because nothing has been issued yet.")) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/work-order/${currentWoId}/cancel`, { method: "POST" });
+    const data = await res.json();
+    if (data.error) { errorMsg.textContent = data.error; return; }
+
+    await loadWO(currentWoId);
+    alert("Work Order cancelled");
+  } catch (err) {
+    console.error(err);
+    errorMsg.textContent = "Error cancelling Work Order";
+  }
+}
+</script>
+
+</body>
+</html>

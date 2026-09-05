@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="config.js"></script>
+<title>Books of Accounts – Dashboard</title>
+
+<style>
+* { box-sizing: border-box; }
+
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --border: #dde2e8;
+  --ink: #17222e;
+  --ink-soft: #5c6b7b;
+  --ink-faint: #8996a5;
+  --accent: #1f3a52;
+  --focus: #2c5f8a;
+
+  --amber: #92660b;
+  --amber-border: #c9a227;
+  --amber-bg: #fff8e6;
+
+  --green: #1e7a4b;
+  --green-bg: #e9f7ef;
+  --red: #a3312d;
+  --red-bg: #fbebea;
+
+  --chart-1: #1f3a52;
+  --chart-2: #2c5f8a;
+  --chart-3: #5b9bd5;
+  --chart-4: #92660b;
+  --chart-5: #8996a5;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--ink);
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+a { color: inherit; }
+
+.container {
+  width: 1360px;
+  max-width: 97%;
+  margin: 22px auto 36px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: 5px;
+  padding: 18px 22px 26px 22px;
+}
+
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.masthead h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 21px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+  letter-spacing: 0.2px;
+}
+
+.masthead .subtitle { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+
+.header-actions { display: flex; align-items: center; gap: 12px; }
+
+.header-actions a {
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--focus);
+}
+.header-actions a:hover { text-decoration: underline; }
+
+.range-picker { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+.range-picker select {
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fbfcfd;
+}
+
+#statusMsg { font-size: 12.5px; color: var(--red); margin-bottom: 10px; }
+#loadingMsg { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 10px; }
+
+/* ---- KPI cards ---- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 22px;
+}
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.kpi-card {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 12px 14px;
+  background: #fbfcfd;
+}
+
+.kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-faint);
+  margin-bottom: 4px;
+}
+
+.kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.kpi-sub { font-size: 11.5px; margin-top: 4px; }
+.kpi-sub.up { color: var(--green); }
+.kpi-sub.down { color: var(--red); }
+.kpi-sub.flat { color: var(--ink-faint); }
+
+.kpi-card.warn { background: var(--amber-bg); border-color: var(--amber-border); }
+.kpi-card.warn .kpi-value { color: var(--amber); }
+.kpi-card.danger .kpi-value { color: var(--red); }
+.kpi-card.good .kpi-value { color: var(--green); }
+
+/* ---- chart panels ---- */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 1100px) { .chart-grid { grid-template-columns: 1fr; } }
+
+.chart-grid.thirds { grid-template-columns: 1fr 1fr; }
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 14px 16px 10px 16px;
+  background: var(--surface);
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.panel canvas { max-height: 280px; }
+
+.empty-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-align: center;
+  padding: 30px 0;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header-bar">
+    <div class="masthead">
+      <h1>📊 Executive Dashboard</h1>
+      <div class="subtitle">A live overview across Sales, Purchases, Cash, Inventory and Production</div>
+    </div>
+    <div class="header-actions">
+      <div class="range-picker">
+        Trend range:
+        <select id="monthsSel" onchange="loadDashboard()">
+          <option value="3">Last 3 months</option>
+          <option value="6" selected>Last 6 months</option>
+          <option value="12">Last 12 months</option>
+        </select>
+      </div>
+      <a href="Main Menu.html">&larr; Main Menu</a>
+    </div>
+  </div>
+
+  <div id="loadingMsg">Loading dashboard…</div>
+  <div id="statusMsg" style="display:none;"></div>
+
+  <div id="dashboardBody" style="display:none;">
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="chart-grid">
+      <div class="panel">
+        <div class="panel-title">Sales vs Purchases — Monthly Trend</div>
+        <canvas id="trendChart"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Work Order Status</div>
+        <canvas id="woChart"></canvas>
+        <div class="empty-note" id="woEmpty" style="display:none;">No work orders yet.</div>
+      </div>
+    </div>
+
+    <div class="chart-grid thirds">
+      <div class="panel">
+        <div class="panel-title">Top 5 Customers by Sales Value</div>
+        <canvas id="customerChart"></canvas>
+        <div class="empty-note" id="customerEmpty" style="display:none;">No sales invoices yet.</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top 5 Items by Sales Value</div>
+        <canvas id="itemChart"></canvas>
+        <div class="empty-note" id="itemEmpty" style="display:none;">No sales invoice lines yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// Chart.js is loaded from a CDN at runtime rather than a single hardcoded
+// <script src>, because a single CDN can be blocked or unreachable on some
+// networks (corporate proxies, ad-blockers, regional restrictions). This
+// tries a short list of CDNs in order and only calls loadDashboard() once
+// the Chart global actually exists — if all of them fail, the page shows a
+// clear message instead of a silent "Chart is not defined" crash.
+const CHART_JS_CDNS = [
+  "https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js",
+  "https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js"
+];
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("failed to load " + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function loadChartJs() {
+  for (const url of CHART_JS_CDNS) {
+    try {
+      await loadScript(url);
+      if (window.Chart) return true;
+    } catch (e) { /* try the next CDN */ }
+  }
+  return false;
+}
+
+const API = window.API_BASE_URL;
+let trendChart, woChart, customerChart, itemChart;
+
+function money(n) {
+  n = Number(n) || 0;
+  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+
+function pctDelta(curr, prev) {
+  if (prev === null || prev === undefined) return null;
+  if (prev === 0) return curr > 0 ? 100 : 0;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
+function kpiCard(label, value, opts = {}) {
+  const cls = opts.cls ? ` ${opts.cls}` : "";
+  let sub = "";
+  if (opts.delta !== null && opts.delta !== undefined) {
+    const dirClass = opts.delta > 0.5 ? "up" : opts.delta < -0.5 ? "down" : "flat";
+    const arrow = opts.delta > 0.5 ? "▲" : opts.delta < -0.5 ? "▼" : "—";
+    sub = `<div class="kpi-sub ${dirClass}">${arrow} ${Math.abs(opts.delta).toFixed(1)}% vs last month</div>`;
+  } else if (opts.note) {
+    sub = `<div class="kpi-sub flat">${opts.note}</div>`;
+  }
+  return `<div class="kpi-card${cls}">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value">${value}</div>
+    ${sub}
+  </div>`;
+}
+
+async function loadDashboard() {
+  const months = document.getElementById("monthsSel").value;
+  const loadingMsg = document.getElementById("loadingMsg");
+  const statusMsg = document.getElementById("statusMsg");
+  const body = document.getElementById("dashboardBody");
+
+  loadingMsg.style.display = "block";
+  statusMsg.style.display = "none";
+  body.style.display = "none";
+
+  try {
+    const res = await fetch(`${API}/report/dashboard-summary?months=${months}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load dashboard");
+
+    renderKpis(data.kpis);
+    renderTrendChart(data.monthly_trend);
+    renderWoChart(data.work_order_status);
+    renderCustomerChart(data.top_customers);
+    renderItemChart(data.top_items);
+
+    loadingMsg.style.display = "none";
+    body.style.display = "block";
+  } catch (err) {
+    loadingMsg.style.display = "none";
+    statusMsg.style.display = "block";
+    statusMsg.textContent = "Could not load dashboard: " + err.message;
+  }
+}
+
+function renderKpis(k) {
+  const salesDelta = pctDelta(k.sales_this_month, k.sales_last_month);
+  const purchDelta = pctDelta(k.purchase_this_month, k.purchase_last_month);
+
+  const cards = [
+    kpiCard("Sales — This Month", money(k.sales_this_month), { delta: salesDelta }),
+    kpiCard("Purchases — This Month", money(k.purchase_this_month), { delta: purchDelta }),
+    kpiCard("Cash &amp; Bank Balance", money(k.cash_bank_balance), {
+      cls: k.cash_bank_balance < 0 ? "danger" : "good"
+    }),
+    kpiCard("GST Payable (Net)", money(k.gst_payable), {
+      cls: k.gst_payable > 0 ? "warn" : "good",
+      note: k.gst_payable > 0 ? "Output tax exceeds Input credit" : "Input credit covers output tax"
+    }),
+    kpiCard("Receivables Outstanding", money(k.receivables_total), { cls: "warn" }),
+    kpiCard("Payables Outstanding", money(k.payables_total), { cls: "warn" }),
+    kpiCard("Stock Valuation", money(k.stock_valuation_total), {}),
+    kpiCard("Low Stock Items", k.low_stock_count, {
+      cls: k.low_stock_count > 0 ? "danger" : "good",
+      note: k.low_stock_count > 0 ? "Below reorder level — see Item Wise Report" : "All items above reorder level"
+    }),
+    kpiCard("Open Work Orders", k.open_work_orders, {}),
+    kpiCard("Pending Sales Orders", k.pending_sales_orders, {})
+  ];
+  document.getElementById("kpiGrid").innerHTML = cards.join("");
+}
+
+function renderTrendChart(trend) {
+  const ctx = document.getElementById("trendChart");
+  const labels = trend.map(t => t.month);
+  const sales = trend.map(t => t.sales);
+  const purchases = trend.map(t => t.purchases);
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Sales",
+          data: sales,
+          borderColor: "#1f3a52",
+          backgroundColor: "rgba(31,58,82,0.08)",
+          tension: 0.25,
+          fill: true
+        },
+        {
+          label: "Purchases",
+          data: purchases,
+          borderColor: "#92660b",
+          backgroundColor: "rgba(146,102,11,0.08)",
+          tension: 0.25,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: "bottom" } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => "₹" + v.toLocaleString("en-IN") } } }
+    }
+  });
+}
+
+function renderWoChart(rows) {
+  const canvas = document.getElementById("woChart");
+  const empty = document.getElementById("woEmpty");
+  if (!rows || !rows.length) {
+    canvas.style.display = "none";
+    empty.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  empty.style.display = "none";
+
+  const colorMap = { DRAFT: "#8996a5", ISSUED: "#2c5f8a", COMPLETED: "#1e7a4b", CANCELLED: "#a3312d" };
+  if (woChart) woChart.destroy();
+  woChart = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels: rows.map(r => r.status),
+      datasets: [{
+        data: rows.map(r => r.count),
+        backgroundColor: rows.map(r => colorMap[r.status] || "#5b9bd5")
+      }]
+    },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } } }
+  });
+}
+
+function renderCustomerChart(rows) {
+  const canvas = document.getElementById("customerChart");
+  const empty = document.getElementById("customerEmpty");
+  if (!rows || !rows.length) {
+    canvas.style.display = "none";
+    empty.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  empty.style.display = "none";
+
+  if (customerChart) customerChart.destroy();
+  customerChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: rows.map(r => r.customer),
+      datasets: [{ label: "Sales Value", data: rows.map(r => r.total), backgroundColor: "#2c5f8a" }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { callback: v => "₹" + v.toLocaleString("en-IN") } } }
+    }
+  });
+}
+
+function renderItemChart(rows) {
+  const canvas = document.getElementById("itemChart");
+  const empty = document.getElementById("itemEmpty");
+  if (!rows || !rows.length) {
+    canvas.style.display = "none";
+    empty.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  empty.style.display = "none";
+
+  if (itemChart) itemChart.destroy();
+  itemChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: rows.map(r => r.item_name),
+      datasets: [{ label: "Sales Value", data: rows.map(r => r.total), backgroundColor: "#1f3a52" }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { callback: v => "₹" + v.toLocaleString("en-IN") } } }
+    }
+  });
+}
+
+(async function init() {
+  const chartsReady = await loadChartJs();
+  if (!chartsReady) {
+    document.getElementById("loadingMsg").style.display = "none";
+    const statusMsg = document.getElementById("statusMsg");
+    statusMsg.style.display = "block";
+    statusMsg.textContent =
+      "Could not load the charting library (Chart.js) from any CDN — check your internet connection or whether a firewall/ad-blocker is blocking cdn.jsdelivr.net, cdnjs.cloudflare.com and unpkg.com.";
+    return;
+  }
+  loadDashboard();
+})();
+</script>
+
+</body>
+</html>
