@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Ledger Master</title>
+
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 520px; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+label { display: block; margin-top: 12px; }
+input, select { width: 100%; padding: 6px; margin-top: 4px; }
+button { margin-top: 15px; padding: 6px 12px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid black; padding: 6px; }
+.system { background:#eaeaea; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="container">
+  <h2>Ledger Master</h2>
+
+  <label>
+    Ledger Name
+    <input type="text" id="ledgerName" autocomplete="off">
+  </label>
+
+  <label>
+    Group
+    <select id="ledgerGroup">
+      <option value="">Loading groups…</option>
+    </select>
+  </label>
+
+  <button onclick="createLedger()">Create Ledger</button>
+
+  <table id="ledgerTable">
+    <thead>
+      <tr>
+        <th>Ledger</th>
+        <th>Group</th>
+        <th>Nature</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+/* SERVER IS SAME ORIGIN */
+const API = "";
+
+/* ---------------- LOAD GROUPS ---------------- */
+async function loadGroups() {
+  const ddl = document.getElementById("ledgerGroup");
+
+  try {
+    const res = await fetch(API_BASE_URL + "/ledger/groups");
+
+    if (!res.ok) {
+      throw new Error("HTTP " + res.status);
+    }
+
+    const groups = await res.json();
+
+    ddl.innerHTML = `<option value="">-- Select Group --</option>`;
+
+    if (!Array.isArray(groups) || groups.length === 0) {
+      ddl.innerHTML = `<option value="">No groups found</option>`;
+      return;
+    }
+
+    for (const g of groups) {
+      const opt = document.createElement("option");
+      opt.value = g.group_name;
+      opt.textContent = g.group_name;
+      ddl.appendChild(opt);
+    }
+
+  } catch (err) {
+    console.error("GROUP LOAD ERROR:", err);
+    ddl.innerHTML = `<option value="">ERROR loading groups</option>`;
+    alert("Ledger groups could not be loaded.\nCheck console.");
+  }
+}
+
+/* ---------------- LOAD LEDGERS ---------------- */
+async function loadLedgers() {
+  try {
+    const res = await fetch(API_BASE_URL + "/ledger/master");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+
+    const rows = await res.json();
+    const tbody = document.querySelector("#ledgerTable tbody");
+    tbody.innerHTML = "";
+
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      if (r.is_system) tr.className = "system";
+
+      tr.innerHTML = `
+        <td>${r.ledger}</td>
+        <td>${r.ledger_group}</td>
+        <td>${r.nature}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error("LEDGER LOAD ERROR:", err);
+    alert("Failed to load ledger list");
+  }
+}
+
+/* ---------------- CREATE LEDGER ---------------- */
+async function createLedger() {
+  const ledger = document.getElementById("ledgerName").value.trim();
+  const group = document.getElementById("ledgerGroup").value;
+
+  if (!ledger) return alert("Ledger name required");
+  if (!group) return alert("Please select a group");
+
+  try {
+    const res = await fetch(API_BASE_URL + "/ledger/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ledger, group })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Create failed");
+    }
+
+    document.getElementById("ledgerName").value = "";
+    document.getElementById("ledgerGroup").value = "";
+
+    loadLedgers();
+
+  } catch (err) {
+    console.error("CREATE LEDGER ERROR:", err);
+    alert(err.message);
+  }
+}
+
+/* ---------------- INIT ---------------- */
+window.addEventListener("DOMContentLoaded", () => {
+  loadGroups();
+  loadLedgers();
+});
+</script>
+
+</body>
+</html>

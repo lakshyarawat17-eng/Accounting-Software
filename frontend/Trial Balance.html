@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Trial Balance</title>
+
+<style>
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+h2 {
+  text-align: center;
+}
+
+.filter {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+.amount {
+  text-align: right;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<h2>Trial Balance</h2>
+
+<div class="filter">
+  <label>From:
+    <input type="date" id="fromDate">
+  </label>
+  &nbsp;&nbsp;
+  <label>To:
+    <input type="date" id="toDate">
+  </label>
+  &nbsp;&nbsp;
+  <button onclick="loadTrialBalance()">Apply</button>
+</div>
+
+<table id="trialTable">
+<tr>
+  <th>Ledger Name</th>
+  <th>Debit</th>
+  <th>Credit</th>
+</tr>
+</table>
+
+<script>
+function parseDate(dateStr) {
+  // Handles YYYY-MM-DD and DD-MM-YYYY
+  if (dateStr.includes("-")) {
+    const parts = dateStr.split("-");
+    if (parts[0].length === 4) {
+      return new Date(dateStr);
+    } else {
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    }
+  }
+  return null;
+}
+
+function loadTrialBalance() {
+  fetch(API_BASE_URL + "/ledger/all")
+    .then(res => res.json())
+    .then(data => {
+
+      const fromInput = document.getElementById("fromDate").value;
+      const toInput = document.getElementById("toDate").value;
+
+      const fromDate = fromInput ? new Date(fromInput) : null;
+      const toDate = toInput ? new Date(toInput) : null;
+
+      // Date-safe filtering
+      data = data.filter(e => {
+        const entryDate = parseDate(e.date);
+        if (!entryDate) return false;
+        if (fromDate && entryDate < fromDate) return false;
+        if (toDate && entryDate > toDate) return false;
+        return true;
+      });
+
+      const table = document.getElementById("trialTable");
+      while (table.rows.length > 1) table.deleteRow(1);
+
+      const ledgerMap = {};
+      let totalDebit = 0;
+      let totalCredit = 0;
+
+      data.forEach(e => {
+        if (!ledgerMap[e.ledger]) {
+          ledgerMap[e.ledger] = { debit: 0, credit: 0 };
+        }
+        ledgerMap[e.ledger].debit += e.debit;
+        ledgerMap[e.ledger].credit += e.credit;
+      });
+
+      Object.keys(ledgerMap).sort().forEach(ledger => {
+        const balance = ledgerMap[ledger].debit - ledgerMap[ledger].credit;
+        const row = table.insertRow();
+
+        if (balance > 0) {
+          row.innerHTML = `
+            <td>${ledger}</td>
+            <td class="amount">${balance.toFixed(2)}</td>
+            <td></td>
+          `;
+          totalDebit += balance;
+        } else if (balance < 0) {
+          row.innerHTML = `
+            <td>${ledger}</td>
+            <td></td>
+            <td class="amount">${Math.abs(balance).toFixed(2)}</td>
+          `;
+          totalCredit += Math.abs(balance);
+        }
+      });
+
+      const totalRow = table.insertRow();
+      totalRow.innerHTML = `
+        <td><strong>Total</strong></td>
+        <td class="amount"><strong>${totalDebit.toFixed(2)}</strong></td>
+        <td class="amount"><strong>${totalCredit.toFixed(2)}</strong></td>
+      `;
+    });
+}
+
+loadTrialBalance();
+</script>
+
+</body>
+</html>
