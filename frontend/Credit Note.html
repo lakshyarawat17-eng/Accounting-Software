@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Credit Note</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+#suggestions {
+  border: 1px solid #aaa;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  background: white;
+  z-index: 10;
+}
+#suggestions div:hover {
+  background: #eee;
+}
+
+.totals-box {
+  margin-top: 10px;
+  text-align: right;
+}
+.totals-box div {
+  margin: 2px 0;
+}
+.totals-box .grand {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+/* Link-mode toggle */
+.type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+}
+.type-toggle button {
+  flex: 1;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  border: 1px solid black;
+  background: white;
+  cursor: pointer;
+}
+.type-toggle button.active {
+  background: #333;
+  color: white;
+}
+.type-toggle button:first-child { border-right: none; }
+
+.empty-msg {
+  color: #666;
+  font-style: italic;
+  padding: 10px;
+}
+
+.note {
+  font-size: 12px;
+  color: #555;
+  margin-top: 4px;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">Credit Note (Sales Return / Adjustment)</div>
+
+<!-- LINK MODE TOGGLE -->
+<div class="type-toggle">
+  <button id="btnLinked" class="active" onclick="setMode('LINKED')">🔗 Against a Sales Invoice</button>
+  <button id="btnIndependent" onclick="setMode('INDEPENDENT')">✏️ Independent</button>
+</div>
+
+<!-- 1️⃣ HEADER -->
+<div class="section-box">
+  <div class="section-title">Credit Note Details</div>
+
+  <label>Date:
+    <input type="date" id="noteDate">
+  </label>
+
+  <label>Note No:
+    <input type="text" id="noteNo" readonly style="background:#eee;">
+  </label>
+
+  <label>Customer:
+    <input type="text" id="customer" placeholder="Customer Name" list="customerList">
+    <datalist id="customerList"></datalist>
+  </label>
+
+  <label id="taxTypeLabel">Adjustment Type:
+    <select id="taxType">
+      <option value="INTRA">Same State (CGST + SGST)</option>
+      <option value="INTER">Different State (IGST)</option>
+    </select>
+  </label>
+
+  <br><br>
+
+  <label>Reason:
+    <input type="text" id="reason" placeholder="e.g. Damaged goods, rate correction" style="width:300px;">
+  </label>
+
+  <label>
+    <input type="checkbox" id="adjustsStock" checked>
+    Adjust stock (goods physically returned)
+  </label>
+</div>
+
+<!-- 2️⃣ LINKED INVOICE SELECTION -->
+<div class="section-box" id="linkedBox">
+  <div class="section-title">Select Sales Invoice</div>
+  <div id="invoicePickerArea">
+    <div class="empty-msg">Enter a customer above to see their sales invoices.</div>
+  </div>
+</div>
+
+<!-- 2️⃣b LINKED INVOICE ITEMS (pick what to return) -->
+<div class="section-box" id="linkedItemsBox" style="display:none;">
+  <div class="section-title">Items on <span id="linkedInvoiceNo"></span></div>
+  <div id="linkedItemsArea"></div>
+  <div class="note">Qty is capped at what hasn't already been returned against this invoice.</div>
+</div>
+
+<!-- 3️⃣ ADD ITEM (independent mode) -->
+<div class="section-box" id="addItemBox" style="display:none;">
+  <div class="section-title">Add Item</div>
+
+  <label>Item:
+    <input type="text" id="itemSearch" placeholder="Search item">
+    <div id="suggestions"></div>
+  </label>
+
+  <label>Qty:
+    <input type="number" id="itemQty" value="1">
+  </label>
+
+  <label>Rate ₹:
+    <input type="number" id="itemRate" step="0.01">
+  </label>
+
+  <label>GST Rate:
+    <select id="itemGstRate">
+      <option value="0">0%</option>
+      <option value="0.25">0.25%</option>
+      <option value="3">3%</option>
+      <option value="5">5%</option>
+      <option value="12">12%</option>
+      <option value="18" selected>18%</option>
+      <option value="28">28%</option>
+    </select>
+  </label>
+
+  <label>Supply Type:
+    <select id="itemSupplyType">
+      <option value="TAXABLE" selected>Taxable</option>
+      <option value="EXEMPT">Exempt</option>
+      <option value="NIL_RATED">Nil Rated</option>
+      <option value="ZERO_RATED">Zero Rated (Export/SEZ)</option>
+    </select>
+  </label>
+  <span id="supplyTypeHint" class="note" style="display:inline;"></span>
+
+  <button onclick="addItem()">Add Item</button>
+</div>
+
+<!-- 4️⃣ ITEMS LIST -->
+<div class="section-box">
+  <div class="section-title">Credit Note Items</div>
+
+  <table id="itemsTable">
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>Supply Type</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  </table>
+
+  <div class="totals-box" id="totalsBox"></div>
+</div>
+
+<!-- 5️⃣ SAVE -->
+<div class="section-box">
+  <button onclick="saveCreditNote()">Save Credit Note</button>
+</div>
+
+<script>
+let mode = "LINKED";
+let items = []; // {item_id, invoice_item_id, item_name, qty, rate, amount, gst_rate, gst_amount}
+let selectedItem = null;
+let linkedInvoice = null; // full invoice object (with items) once picked
+
+const customerInput = document.getElementById("customer");
+const taxTypeSelect = document.getElementById("taxType");
+const itemSearch = document.getElementById("itemSearch");
+const suggestionsBox = document.getElementById("suggestions");
+const itemGstRate = document.getElementById("itemGstRate");
+const itemSupplyType = document.getElementById("itemSupplyType");
+const supplyTypeHint = document.getElementById("supplyTypeHint");
+
+const SUPPLY_TYPE_LABELS = {
+  TAXABLE: null,
+  EXEMPT: "Exempt",
+  NIL_RATED: "Nil Rated",
+  ZERO_RATED: "Zero Rated"
+};
+
+// EXEMPT / NIL_RATED / ZERO_RATED lines always bill at 0% GST regardless of
+// whatever the GST Rate dropdown shows — mirrors the backend forcing this
+// in /credit-note/save (Step 4) and the same per-line override already on
+// the Sales Book screen, so what's shown here matches what actually saves.
+let itemGstRateBeforeDisable = null;
+function applySupplyTypeToGstField() {
+  const v = itemSupplyType.value;
+  const lockToZero = v !== "TAXABLE";
+  if (lockToZero) {
+    if (itemGstRateBeforeDisable === null) itemGstRateBeforeDisable = itemGstRate.value;
+    itemGstRate.value = "0";
+    itemGstRate.disabled = true;
+    supplyTypeHint.textContent = "GST forced to 0% for this line.";
+  } else {
+    itemGstRate.disabled = false;
+    if (itemGstRateBeforeDisable !== null) {
+      itemGstRate.value = itemGstRateBeforeDisable;
+      itemGstRateBeforeDisable = null;
+    }
+    supplyTypeHint.textContent = "";
+  }
+}
+itemSupplyType.addEventListener("change", applySupplyTypeToGstField);
+
+window.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("noteDate").valueAsDate = new Date();
+  loadNextNoteNo();
+  loadCustomers();
+  setMode("LINKED");
+});
+
+async function loadNextNoteNo() {
+  try {
+    const res = await fetch(API_BASE_URL + "/credit-note/next-number");
+    const data = await res.json();
+    if (data.noteNo) document.getElementById("noteNo").value = data.noteNo;
+  } catch (e) {
+    // Non-fatal — the backend assigns the real number on save regardless.
+  }
+}
+
+async function loadCustomers() {
+  try {
+    const res = await fetch(API_BASE_URL + "/parties/customers");
+    const list = await res.json();
+    const dl = document.getElementById("customerList");
+    dl.innerHTML = "";
+    list.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.name;
+      dl.appendChild(opt);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("btnLinked").classList.toggle("active", m === "LINKED");
+  document.getElementById("btnIndependent").classList.toggle("active", m === "INDEPENDENT");
+  document.getElementById("linkedBox").style.display = m === "LINKED" ? "block" : "none";
+  document.getElementById("addItemBox").style.display = m === "INDEPENDENT" ? "block" : "none";
+  document.getElementById("taxTypeLabel").style.display = m === "LINKED" ? "none" : "inline";
+
+  linkedInvoice = null;
+  document.getElementById("linkedItemsBox").style.display = "none";
+  items = [];
+  renderItemsTable();
+
+  if (m === "LINKED" && customerInput.value.trim()) {
+    loadInvoicesForCustomer();
+  }
+}
+
+/* Reload the invoice picker whenever the customer changes, in LINKED mode */
+customerInput.addEventListener("change", () => {
+  if (mode === "LINKED") loadInvoicesForCustomer();
+});
+
+async function loadInvoicesForCustomer() {
+  const area = document.getElementById("invoicePickerArea");
+  const customer = customerInput.value.trim();
+
+  linkedInvoice = null;
+  document.getElementById("linkedItemsBox").style.display = "none";
+  items = [];
+  renderItemsTable();
+
+  if (!customer) {
+    area.innerHTML = `<div class="empty-msg">Enter a customer above to see their sales invoices.</div>`;
+    return;
+  }
+
+  area.innerHTML = `<div class="empty-msg">Loading...</div>`;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/sales-invoice/list?customer=${encodeURIComponent(customer)}`);
+    const list = await res.json();
+
+    if (!list.length) {
+      area.innerHTML = `<div class="empty-msg">No sales invoices found for this customer yet.</div>`;
+      return;
+    }
+
+    area.innerHTML = `
+      <select id="invoiceSelect" style="width:100%; padding:6px;">
+        <option value="">-- Select an invoice --</option>
+        ${list.map(inv => `
+          <option value="${inv.id}">
+            ${inv.invoice_no} — ${inv.date} — Total ₹${inv.total_amount.toFixed(2)} — Balance ₹${inv.balance.toFixed(2)}
+          </option>
+        `).join("")}
+      </select>
+    `;
+    document.getElementById("invoiceSelect").addEventListener("change", onInvoiceSelected);
+  } catch (e) {
+    area.innerHTML = `<div class="empty-msg">Could not load sales invoices.</div>`;
+  }
+}
+
+async function onInvoiceSelected(e) {
+  const id = e.target.value;
+  items = [];
+  renderItemsTable();
+
+  if (!id) {
+    linkedInvoice = null;
+    document.getElementById("linkedItemsBox").style.display = "none";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/sales-invoice/${id}`);
+  const inv = await res.json();
+  if (inv.error) {
+    alert(inv.error);
+    return;
+  }
+
+  linkedInvoice = inv;
+  taxTypeSelect.value = inv.igst > 0 ? "INTER" : "INTRA";
+
+  document.getElementById("linkedInvoiceNo").textContent = inv.invoice_no;
+  document.getElementById("linkedItemsBox").style.display = "block";
+
+  const area = document.getElementById("linkedItemsArea");
+  area.innerHTML = `
+    <table>
+      <tr>
+        <th>Item</th>
+        <th>Billed Qty</th>
+        <th>Already Returned</th>
+        <th>Returnable</th>
+        <th>Return Qty</th>
+        <th>Rate</th>
+        <th>Supply Type</th>
+        <th>GST %</th>
+      </tr>
+      ${inv.items.map((it, idx) => {
+        const returnable = it.qty - it.already_credited_qty;
+        const label = SUPPLY_TYPE_LABELS[(it.supply_type || "TAXABLE").toUpperCase()] || null;
+        return `
+          <tr>
+            <td>${it.item_name}</td>
+            <td class="center">${it.qty}</td>
+            <td class="center">${it.already_credited_qty}</td>
+            <td class="center">${returnable}</td>
+            <td class="amount">
+              <input type="number" min="0" max="${returnable}" step="any" value="0"
+                     style="width:90px; text-align:right;" data-idx="${idx}"
+                     ${returnable <= 0 ? "disabled" : ""}
+                     onchange="onReturnQtyChange(this)">
+            </td>
+            <td class="amount">${it.rate.toFixed(2)}</td>
+            <td class="center">${label || "Taxable"}</td>
+            <td class="center">${label ? "—" : it.gst_rate + "%"}</td>
+          </tr>
+        `;
+      }).join("")}
+    </table>
+  `;
+}
+
+function onReturnQtyChange(input) {
+  const idx = Number(input.dataset.idx);
+  const it = linkedInvoice.items[idx];
+  const returnable = it.qty - it.already_credited_qty;
+  let qty = Number(input.value) || 0;
+
+  if (qty > returnable) {
+    alert(`Cannot return more than ${returnable} of "${it.item_name}"`);
+    qty = returnable;
+    input.value = qty;
+  }
+  if (qty < 0) { qty = 0; input.value = 0; }
+
+  // Rebuild the items[] list from all the returnable-qty inputs currently
+  // on screen, so edits (including clearing back to 0) always reconcile.
+  items = [];
+  document.querySelectorAll('#linkedItemsArea input[type="number"]').forEach(inp => {
+    const i = Number(inp.dataset.idx);
+    const q = Number(inp.value) || 0;
+    if (q <= 0) return;
+    const lineItem = linkedInvoice.items[i];
+    const amount = q * lineItem.rate;
+    const gstAmount = amount * (lineItem.gst_rate / 100);
+    items.push({
+      item_id: lineItem.item_id,
+      invoice_item_id: lineItem.id,
+      item_name: lineItem.item_name,
+      qty: q,
+      rate: lineItem.rate,
+      amount,
+      gst_rate: lineItem.gst_rate,
+      gst_amount: gstAmount,
+      // Sent for display consistency only — the backend always re-derives
+      // this from the original invoice line (Step 4), so it can't be
+      // spoofed by anything sent here.
+      supply_type: (lineItem.supply_type || "TAXABLE").toUpperCase()
+    });
+  });
+
+  renderItemsTable();
+}
+
+/* 🔍 ITEM AUTOCOMPLETE (independent mode) */
+itemSearch.addEventListener("input", async () => {
+  selectedItem = null;
+  const q = itemSearch.value.trim();
+
+  if (q.length < 2) {
+    suggestionsBox.innerHTML = "";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/items/search?q=${q}`);
+  const list = await res.json();
+
+  suggestionsBox.innerHTML = "";
+  list.forEach(item => {
+    const div = document.createElement("div");
+    div.textContent = `${item.item_name} (₹${item.selling_price})`;
+    div.style.padding = "4px";
+    div.style.cursor = "pointer";
+
+    div.onclick = () => {
+      selectedItem = item;
+      itemSearch.value = item.item_name;
+      itemRate.value = item.selling_price || "";
+      if (item.gst_rate !== null && item.gst_rate !== undefined) {
+        const match = [...itemGstRate.options].find(
+          o => Number(o.value) === Number(item.gst_rate)
+        );
+        if (match) itemGstRate.value = match.value;
+      }
+
+      // Prefill this line's Supply Type from the item's default
+      // classification, then let applySupplyTypeToGstField() take care of
+      // locking/unlocking the GST Rate field accordingly — same pattern as
+      // the Sales Book screen. Reset the "before disable" cache first so a
+      // previous line's stale GST% doesn't leak into this one.
+      itemGstRateBeforeDisable = null;
+      itemSupplyType.value = SUPPLY_TYPE_LABELS.hasOwnProperty((item.supply_type || "").toUpperCase())
+        ? (item.supply_type || "TAXABLE").toUpperCase()
+        : "TAXABLE";
+      applySupplyTypeToGstField();
+
+      suggestionsBox.innerHTML = "";
+    };
+
+    suggestionsBox.appendChild(div);
+  });
+});
+
+/* ➕ ADD ITEM (independent mode) */
+function addItem() {
+  const name = itemSearch.value.trim();
+  const qty = Number(itemQty.value);
+  const rate = Number(itemRate.value);
+  const supplyType = itemSupplyType.value;
+  // EXEMPT / NIL_RATED / ZERO_RATED always bill at 0% GST regardless of
+  // whatever the GST Rate dropdown shows — mirrors the backend forcing in
+  // /credit-note/save (Step 4).
+  const gstRate = supplyType === "TAXABLE" ? Number(itemGstRate.value) : 0;
+
+  if (!name) { alert("Item name required"); return; }
+  if (qty <= 0 || rate <= 0) { alert("Invalid qty or rate"); return; }
+
+  const amount = qty * rate;
+  const gstAmount = amount * (gstRate / 100);
+
+  items.push({
+    item_id: selectedItem ? selectedItem.id : null,
+    invoice_item_id: null,
+    item_name: name,
+    qty,
+    rate,
+    amount,
+    gst_rate: gstRate,
+    gst_amount: gstAmount,
+    supply_type: supplyType
+  });
+
+  selectedItem = null;
+  itemSearch.value = "";
+  itemQty.value = 1;
+  itemRate.value = "";
+  itemGstRate.value = "18";
+  itemGstRateBeforeDisable = null;
+  itemSupplyType.value = "TAXABLE";
+  applySupplyTypeToGstField();
+
+  renderItemsTable();
+}
+
+function removeItem(idx) {
+  items.splice(idx, 1);
+  renderItemsTable();
+}
+
+/* 🧮 RENDER ITEMS TABLE + TOTALS */
+function renderItemsTable() {
+  const table = document.getElementById("itemsTable");
+  table.innerHTML = `
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>Supply Type</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  `;
+
+  items.forEach((item, idx) => {
+    const label = SUPPLY_TYPE_LABELS[(item.supply_type || "TAXABLE").toUpperCase()] || null;
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${item.item_name}</td>
+      <td class="center">${item.qty}</td>
+      <td class="amount">${item.rate.toFixed(2)}</td>
+      <td class="amount">${item.amount.toFixed(2)}</td>
+      <td class="center">${label || "Taxable"}</td>
+      <td class="center">${label ? "—" : item.gst_rate + "%"}</td>
+      <td class="amount">${item.gst_amount.toFixed(2)}</td>
+      <td class="amount">${(item.amount + item.gst_amount).toFixed(2)}</td>
+      <td class="center">${item.invoice_item_id ? "" : `<button onclick="removeItem(${idx})">✕</button>`}</td>
+    `;
+  });
+
+  renderTotals();
+}
+
+function renderTotals() {
+  const totalsBox = document.getElementById("totalsBox");
+
+  if (items.length === 0) {
+    totalsBox.innerHTML = "";
+    return;
+  }
+
+  const taxableItems = items.filter(i => (i.supply_type || "TAXABLE").toUpperCase() === "TAXABLE");
+  const nonTaxableItems = items.filter(i => (i.supply_type || "TAXABLE").toUpperCase() !== "TAXABLE");
+
+  const taxable = taxableItems.reduce((s, i) => s + i.amount, 0);
+  const exemptNilValue = nonTaxableItems
+    .filter(i => ["EXEMPT", "NIL_RATED"].includes((i.supply_type || "").toUpperCase()))
+    .reduce((s, i) => s + i.amount, 0);
+  const zeroRatedValue = nonTaxableItems
+    .filter(i => (i.supply_type || "").toUpperCase() === "ZERO_RATED")
+    .reduce((s, i) => s + i.amount, 0);
+
+  const totalGst = items.reduce((s, i) => s + i.gst_amount, 0);
+  const isInter = taxTypeSelect.value === "INTER";
+
+  const igst = isInter ? totalGst : 0;
+  const cgst = isInter ? 0 : totalGst / 2;
+  const sgst = isInter ? 0 : totalGst / 2;
+  const grandTotal = items.reduce((s, i) => s + i.amount, 0) + totalGst;
+
+  totalsBox.innerHTML = `
+    <div>Taxable Amount: ₹${taxable.toFixed(2)}</div>
+    ${exemptNilValue > 0 ? `<div>Exempt / Nil Rated Amount: ₹${exemptNilValue.toFixed(2)}</div>` : ""}
+    ${zeroRatedValue > 0 ? `<div>Zero Rated (Export/SEZ) Amount: ₹${zeroRatedValue.toFixed(2)}</div>` : ""}
+    ${isInter
+      ? `<div>IGST: ₹${igst.toFixed(2)}</div>`
+      : `<div>CGST: ₹${cgst.toFixed(2)}</div><div>SGST: ₹${sgst.toFixed(2)}</div>`
+    }
+    <div class="grand">Grand Total: ₹${grandTotal.toFixed(2)}</div>
+  `;
+}
+
+taxTypeSelect.addEventListener("change", renderTotals);
+
+/* 💾 SAVE CREDIT NOTE */
+function saveCreditNote() {
+  const date = document.getElementById("noteDate").value;
+  const customer = customerInput.value.trim();
+  const reason = document.getElementById("reason").value.trim();
+  const taxType = taxTypeSelect.value;
+  const adjustsStock = document.getElementById("adjustsStock").checked;
+
+  if (!date || !customer) { alert("Date and customer are required"); return; }
+  if (items.length === 0) { alert("Add at least one item"); return; }
+  if (mode === "LINKED" && !linkedInvoice) { alert("Select a sales invoice to link against, or switch to Independent"); return; }
+
+  fetch(API_BASE_URL + "/credit-note/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date,
+      customer,
+      sales_invoice_id: mode === "LINKED" ? linkedInvoice.id : null,
+      reason,
+      taxType,
+      adjustsStock,
+      items
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) { alert(data.error); return; }
+    alert(`Credit note saved — ${data.note_no}`);
+    window.location.href = "Credit Note Register.html";
+  })
+  .catch(() => alert("Error saving credit note"));
+}
+</script>
+
+</body>
+</html>

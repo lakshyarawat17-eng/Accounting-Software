@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Work Order Register</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.top-actions {
+  text-align: right;
+  margin-bottom: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+}
+.badge-DRAFT { background: #888; }
+.badge-ISSUED { background: #d18f00; }
+.badge-COMPLETED { background: #1a7f37; }
+.badge-CANCELLED { background: #c00; }
+
+.progress-bar {
+  background: #e0e0e0;
+  border-radius: 6px;
+  height: 10px;
+  width: 100px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.progress-fill {
+  background: #1a7f37;
+  height: 100%;
+}
+
+button {
+  margin: 1px;
+  cursor: pointer;
+}
+
+.empty {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.detail-row td {
+  background: #fafafa;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">Work Order Register</div>
+
+<div class="top-actions">
+  <a href="Work Order.html"><button>➕ New Work Order</button></a>
+</div>
+
+<table id="woTable">
+  <tr>
+    <th>WO No</th>
+    <th>FG / WIP Item</th>
+    <th>Target Qty</th>
+    <th>Status</th>
+    <th>Issued / Required</th>
+    <th>Completed / Target</th>
+    <th>Actions</th>
+  </tr>
+</table>
+<div id="emptyMsg" class="empty" style="display:none;">No work orders yet.</div>
+
+<script>
+const STATUS_LABELS = {
+  DRAFT: "Draft",
+  ISSUED: "Issued",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled"
+};
+
+async function loadWOs() {
+  const res = await fetch(API_BASE_URL + "/work-order/list");
+  const list = await res.json();
+
+  const table = document.getElementById("woTable");
+  const emptyMsg = document.getElementById("emptyMsg");
+
+  table.innerHTML = `
+    <tr>
+      <th>WO No</th>
+      <th>FG / WIP Item</th>
+      <th>Target Qty</th>
+      <th>Status</th>
+      <th>Issued / Required</th>
+      <th>Completed / Target</th>
+      <th>Actions</th>
+    </tr>
+  `;
+
+  if (!list.length) {
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+
+  list.forEach(wo => {
+    const row = table.insertRow();
+
+    const issuedPct = wo.required_qty_total > 0
+      ? Math.min(100, (wo.issued_qty_total / wo.required_qty_total) * 100)
+      : 0;
+    const completedPct = wo.target_qty > 0
+      ? Math.min(100, (wo.completed_qty / wo.target_qty) * 100)
+      : 0;
+
+    row.innerHTML = `
+      <td>${wo.wo_no}</td>
+      <td>${wo.fg_item_name}</td>
+      <td class="center">${wo.target_qty} ${wo.fg_unit || ""}</td>
+      <td class="center"><span class="badge badge-${wo.status}">${STATUS_LABELS[wo.status] || wo.status}</span></td>
+      <td class="center">
+        <div class="progress-bar"><div class="progress-fill" style="width:${issuedPct}%;"></div></div>
+        ${wo.issued_qty_total} / ${wo.required_qty_total}
+      </td>
+      <td class="center">
+        <div class="progress-bar"><div class="progress-fill" style="width:${completedPct}%;"></div></div>
+        ${wo.completed_qty} / ${wo.target_qty}
+      </td>
+      <td class="center">
+        <button onclick="goEdit(${wo.id})">📝 View / Edit</button>
+        <button onclick="toggleDetail(${wo.id}, this)">Components</button>
+      </td>
+    `;
+  });
+}
+
+function goEdit(id) {
+  window.location.href = `Work Order.html?wo_id=${id}`;
+}
+
+const openRows = {};
+
+/* Same expand-in-place pattern as BOM Register's toggleDetail — fetches
+   the full WO (with component lines) only when a row is opened, showing
+   component-level issued-vs-required rather than navigating away. */
+async function toggleDetail(id, btn) {
+  const row = btn.closest("tr");
+
+  if (openRows[id]) {
+    openRows[id].remove();
+    delete openRows[id];
+    btn.textContent = "Components";
+    return;
+  }
+
+  btn.textContent = "Loading...";
+  const res = await fetch(API_BASE_URL + `/work-order/${id}`);
+  const wo = await res.json();
+  btn.textContent = "Hide Components";
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "detail-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 7;
+
+  const items = wo.items || [];
+  cell.innerHTML = `
+    <table>
+      <tr>
+        <th>Component</th>
+        <th>Qty per Unit</th>
+        <th>Unit</th>
+        <th>Required</th>
+        <th>Issued</th>
+        <th>Pending</th>
+      </tr>
+      ${items.map(it => `
+        <tr>
+          <td>${it.component_item_name}</td>
+          <td class="center">${it.qty_per_unit}</td>
+          <td class="center">${it.unit || it.component_unit || ""}</td>
+          <td class="center">${it.required_qty}</td>
+          <td class="center">${it.issued_qty}</td>
+          <td class="center">${it.required_qty - it.issued_qty}</td>
+        </tr>
+      `).join("")}
+    </table>
+    ${!items.length ? `<div style="text-align:center; padding:8px; color:#666;">No components on this work order.</div>` : ""}
+    ${wo.narration ? `<div style="margin-top:6px;">Narration: ${wo.narration}</div>` : ""}
+  `;
+  detailRow.appendChild(cell);
+  row.after(detailRow);
+  openRows[id] = detailRow;
+}
+
+loadWOs();
+</script>
+
+</body>
+</html>

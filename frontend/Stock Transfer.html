@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Stock Transfer</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+input, select, textarea {
+  padding: 4px;
+  font-family: inherit;
+}
+
+textarea {
+  width: 100%;
+  min-height: 50px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.center { text-align: center; }
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+}
+
+.field-row label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.field-row label input,
+.field-row label select {
+  margin-top: 4px;
+}
+
+#itemSearch { width: 260px; }
+
+#suggestions {
+  border: 1px solid #aaa;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  background: white;
+  z-index: 10;
+  width: 260px;
+}
+#suggestions div {
+  padding: 6px;
+  cursor: pointer;
+}
+#suggestions div:hover {
+  background: #eee;
+}
+
+.item-wrap {
+  position: relative;
+}
+
+.available-note {
+  font-size: 12px;
+  color: #555;
+  margin-top: 3px;
+}
+.available-note.warn {
+  color: #a00;
+  font-weight: bold;
+}
+
+.error-msg {
+  color: #a00;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+button {
+  padding: 6px 14px;
+  cursor: pointer;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">Stock Transfer</div>
+
+<!-- HEADER -->
+<div class="section-box">
+  <div class="section-title">Transfer Details</div>
+  <div class="field-row">
+    <label>Transfer No
+      <input type="text" id="transferNo" readonly style="background:#f2f2f2; width:120px;">
+    </label>
+    <label>Date
+      <input type="date" id="transferDate">
+    </label>
+  </div>
+</div>
+
+<!-- ITEM & LOCATIONS -->
+<div class="section-box">
+  <div class="section-title">Item &amp; Movement</div>
+
+  <div class="field-row">
+    <label class="item-wrap">Item
+      <input type="text" id="itemSearch" placeholder="Search item" autocomplete="off">
+      <div id="suggestions"></div>
+    </label>
+
+    <label>Qty
+      <input type="number" id="qty" min="0" step="any" style="width:100px;">
+    </label>
+
+    <label>Rate ₹ <span style="font-weight:normal; font-size:11px;">(optional)</span>
+      <input type="number" id="rate" min="0" step="0.01" style="width:100px;">
+    </label>
+  </div>
+
+  <div class="field-row">
+    <label>From Location
+      <select id="fromLocation" style="width:180px;"></select>
+    </label>
+
+    <label>To Location
+      <select id="toLocation" style="width:180px;"></select>
+    </label>
+  </div>
+
+  <div id="availableNote" class="available-note"></div>
+
+  <label style="display:block; margin-top:10px;">Narration
+    <textarea id="narration" placeholder="Optional note about this transfer"></textarea>
+  </label>
+
+  <div id="errorMsg" class="error-msg"></div>
+
+  <div style="margin-top:12px;">
+    <button onclick="submitTransfer()">✅ Confirm Transfer</button>
+  </div>
+</div>
+
+<script>
+let selectedItem = null;
+let allLocations = [];
+
+const itemSearch = document.getElementById("itemSearch");
+const suggestionsBox = document.getElementById("suggestions");
+const fromLocationSelect = document.getElementById("fromLocation");
+const toLocationSelect = document.getElementById("toLocation");
+const availableNote = document.getElementById("availableNote");
+const errorMsg = document.getElementById("errorMsg");
+
+window.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("transferDate").value = new Date().toISOString().slice(0, 10);
+  await Promise.all([loadNextTransferNo(), loadLocations()]);
+});
+
+/* Preview only — the backend assigns the real transfer number again at
+   save time (same convention as PO/SO/Debit/Credit Note). */
+async function loadNextTransferNo() {
+  try {
+    const res = await fetch(API_BASE_URL + "/stock-transfer/next-number");
+    const data = await res.json();
+    if (data.transferNo) document.getElementById("transferNo").value = data.transferNo;
+  } catch (e) {
+    // Non-fatal — the backend assigns the real number on save either way.
+  }
+}
+
+async function loadLocations() {
+  try {
+    const res = await fetch(API_BASE_URL + "/locations?active=1");
+    allLocations = await res.json();
+
+    const options = allLocations
+      .map(l => `<option value="${l.id}">${l.location_name}</option>`)
+      .join("");
+
+    fromLocationSelect.innerHTML = options;
+    toLocationSelect.innerHTML = options;
+
+    // Default From/To to two different locations when possible, so the
+    // form doesn't start in the invalid "same location" state.
+    if (allLocations.length > 1) {
+      fromLocationSelect.value = allLocations[0].id;
+      toLocationSelect.value = allLocations[1].id;
+    }
+
+    refreshAvailable();
+  } catch (err) {
+    console.error("LOCATIONS LOAD ERROR:", err);
+    errorMsg.textContent = "Failed to load locations";
+  }
+}
+
+/* 🔍 ITEM AUTOCOMPLETE (same pattern as Debit Note / Purchase Order) */
+itemSearch.addEventListener("input", async () => {
+  selectedItem = null;
+  const q = itemSearch.value.trim();
+
+  if (q.length < 2) {
+    suggestionsBox.innerHTML = "";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/items/search?q=${encodeURIComponent(q)}`);
+  const list = await res.json();
+
+  suggestionsBox.innerHTML = "";
+  list.forEach(item => {
+    const div = document.createElement("div");
+    div.textContent = `${item.item_name} (${item.unit})`;
+    div.onclick = () => {
+      selectedItem = item;
+      itemSearch.value = item.item_name;
+      suggestionsBox.innerHTML = "";
+      refreshAvailable();
+    };
+    suggestionsBox.appendChild(div);
+  });
+});
+
+document.addEventListener("click", (e) => {
+  if (!suggestionsBox.contains(e.target) && e.target !== itemSearch) {
+    suggestionsBox.innerHTML = "";
+  }
+});
+
+fromLocationSelect.addEventListener("change", refreshAvailable);
+
+/* Show how much of the selected item is available at the chosen From
+   Location, so the user finds out before they hit submit rather than
+   after the server rejects it. */
+async function refreshAvailable() {
+  availableNote.textContent = "";
+  availableNote.classList.remove("warn");
+
+  if (!selectedItem || !fromLocationSelect.value) return;
+
+  try {
+    const res = await fetch(
+      API_BASE_URL + `/stock-transfer/available?item_id=${selectedItem.id}&location_id=${fromLocationSelect.value}`
+    );
+    const data = await res.json();
+    const fromName = fromLocationSelect.options[fromLocationSelect.selectedIndex]?.text || "selected location";
+    availableNote.textContent = `Available at ${fromName}: ${data.available} ${selectedItem.unit}`;
+    if (Number(data.available) <= 0) availableNote.classList.add("warn");
+  } catch (err) {
+    console.error("AVAILABLE STOCK ERROR:", err);
+  }
+}
+
+function submitTransfer() {
+  errorMsg.textContent = "";
+
+  const date = document.getElementById("transferDate").value;
+  const qty = Number(document.getElementById("qty").value);
+  const rate = document.getElementById("rate").value;
+  const narration = document.getElementById("narration").value.trim();
+  const fromLocationId = fromLocationSelect.value;
+  const toLocationId = toLocationSelect.value;
+
+  if (!date) { errorMsg.textContent = "Date is required"; return; }
+  if (!selectedItem) { errorMsg.textContent = "Select an item from the suggestions list"; return; }
+  if (!qty || qty <= 0) { errorMsg.textContent = "Enter a quantity greater than zero"; return; }
+  if (!fromLocationId || !toLocationId) { errorMsg.textContent = "Select both locations"; return; }
+  if (fromLocationId === toLocationId) { errorMsg.textContent = "From and To locations must be different"; return; }
+
+  fetch(API_BASE_URL + "/stock-transfer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date,
+      item_id: selectedItem.id,
+      qty,
+      from_location_id: Number(fromLocationId),
+      to_location_id: Number(toLocationId),
+      rate: rate ? Number(rate) : null,
+      narration: narration || null
+    })
+  })
+  .then(res => res.json().then(data => ({ ok: res.ok, data })))
+  .then(({ ok, data }) => {
+    if (!ok || data.error) {
+      errorMsg.textContent = data.error || "Failed to save stock transfer";
+      return;
+    }
+    alert(`Stock transfer ${data.transfer_no} recorded successfully`);
+    resetForm();
+  })
+  .catch(() => { errorMsg.textContent = "Error recording stock transfer"; });
+}
+
+function resetForm() {
+  selectedItem = null;
+  itemSearch.value = "";
+  document.getElementById("qty").value = "";
+  document.getElementById("rate").value = "";
+  document.getElementById("narration").value = "";
+  availableNote.textContent = "";
+  availableNote.classList.remove("warn");
+  document.getElementById("transferDate").value = new Date().toISOString().slice(0, 10);
+  loadNextTransferNo();
+}
+</script>
+
+</body>
+</html>

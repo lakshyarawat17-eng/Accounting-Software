@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Settings</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; margin:0; }
+.container { width: 640px; margin: 40px auto; background:#fff; padding:25px 30px; border:1px solid #000; }
+h2 { margin-top: 0; }
+.back-link { display:inline-block; margin-bottom: 18px; text-decoration:none; color:#333; }
+.section-title { font-weight:bold; margin: 22px 0 4px 0; font-size: 15px; }
+.section-hint { color:#555; font-size:13px; margin-bottom: 14px; }
+
+.template-list { display:flex; flex-direction:column; gap:10px; }
+
+.template-option {
+  border: 1px solid #999;
+  padding: 12px 14px;
+  cursor: pointer;
+  display:flex;
+  gap: 12px;
+  align-items:flex-start;
+}
+.template-option:hover { background:#f5f5f5; }
+.template-option.selected { border-color:#000; background:#eef1fb; }
+
+.template-option input[type="radio"] { margin-top: 4px; }
+.template-name { font-weight:bold; font-size:14px; }
+.template-desc { font-size:12.5px; color:#444; margin-top:2px; }
+
+button#saveBtn {
+  margin-top: 20px;
+  padding: 8px 18px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#status { margin-left: 12px; font-size: 13px; }
+#status.ok { color: #1a7a1a; }
+#status.err { color: #b00000; }
+
+.loading, .error-msg { font-size: 13px; color:#555; }
+
+.company-form label { display:block; margin-top:10px; font-size:13px; }
+.company-form input { width: 100%; box-sizing: border-box; padding:6px; margin-top:3px; font-family: inherit; font-size:14px; }
+#companyStatus { display:block; margin-top:8px; font-size: 13px; }
+#companyStatus.ok { color: #1a7a1a; }
+#companyStatus.err { color: #b00000; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="container">
+  <a class="back-link" href="Main Menu.html">&larr; Back to Main Menu</a>
+  <h2>Settings</h2>
+
+  <div class="section-title">Company / GST Profile</div>
+  <div class="section-hint">
+    Your own business details. The GSTIN here is what gets printed as the seller on every Sales Invoice PDF,
+    and is compared against each client's GSTIN to automatically work out CGST+SGST vs IGST &mdash;
+    so keep it up to date.
+  </div>
+
+  <div class="company-form">
+    <label>Company / Business Name
+      <input type="text" id="companyName" placeholder="e.g. Acme Traders Pvt Ltd">
+    </label>
+    <label>GSTIN
+      <input type="text" id="companyGstin" placeholder="e.g. 27ABCDE1234F1Z5" maxlength="15" style="text-transform:uppercase;">
+    </label>
+    <label>Registered Address
+      <input type="text" id="companyAddress" placeholder="e.g. 12 MG Road, Pune, Maharashtra 411001">
+    </label>
+    <label>Annual Turnover (₹, previous FY)
+      <input type="number" id="annualTurnover" placeholder="e.g. 25000000" min="0">
+    </label>
+  </div>
+  <div class="section-hint" style="margin-top:6px;">
+    Drives the mandatory HSN digit length on Item Master (CBIC Notification 78/2020,
+    as applied under GSTN's May-2025 GSTR-1 Table 12 rules): &gt; ₹5 crore → 6-digit HSN
+    required on every item · ₹5 crore or below → 4-digit required. HSN is mandatory
+    on every item regardless of turnover — there is no longer an "optional" slab,
+    since HSN reporting has no turnover exemption for B2B supplies.
+  </div>
+
+  <button id="saveCompanyBtn" onclick="saveCompanyProfile()" style="margin-top:14px; padding:8px 18px; font-family:inherit; font-size:14px; cursor:pointer;">Save Company Profile</button>
+  <span id="companyStatus"></span>
+
+  <div class="section-title">Sales Invoice PDF Template</div>
+  <div class="section-hint">Choose the layout used when generating Sales Invoice PDFs.</div>
+
+  <div id="templateList" class="template-list">
+    <div class="loading">Loading templates…</div>
+  </div>
+
+
+  <button id="saveBtn" onclick="saveTemplate()" disabled>Save</button>
+  <span id="status"></span>
+
+  <div class="section-title" style="margin-top:32px;">Email Settings</div>
+  <div class="section-hint">
+    Used to send invoices to clients by email. Railway blocks outbound SMTP, so this app sends mail
+    through an HTTPS API instead. You only need ONE of the keys below &mdash; if more than one is filled in,
+    priority is Resend, then Brevo, then SendGrid. Leave your "from" fields blank while testing with Resend
+    on its shared sandbox address.
+  </div>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    <b>Option A &mdash; Resend</b> (fastest to test right now: <a href="https://resend.com" target="_blank">resend.com</a> &rarr; API Keys.
+    Works immediately sending to your own signup email; verify a domain later to email real clients.)
+    <input type="password" id="resendApiKey" placeholder="re_..." style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    <b>Option B &mdash; Brevo</b> (<a href="https://www.brevo.com" target="_blank">brevo.com</a> &rarr; verify a "from" sender &rarr;
+    Settings &rarr; SMTP &amp; API &rarr; API Keys. Can email any real client right away.)
+    <input type="password" id="brevoApiKey" placeholder="xkeysib-..." style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    <b>Option C &mdash; SendGrid</b> (<a href="https://sendgrid.com" target="_blank">sendgrid.com</a> &rarr; Settings &rarr; Sender Authentication &rarr;
+    verify a single sender &rarr; Settings &rarr; API Keys &rarr; Create. Can also email any real client right away.)
+    <input type="password" id="sendgridApiKey" placeholder="SG...." style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+
+  <div style="display:flex; gap:14px; margin-top:10px;">
+    <label style="flex:1; font-size:13px;">From Name
+      <input type="text" id="mailFromName" placeholder="Entity Name" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+    <label style="flex:1; font-size:13px;">From Email (blank = Resend's sandbox address; must be verified sender for Brevo)
+      <input type="email" id="mailFromEmail" placeholder="you@yourdomain.com" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+  </div>
+
+  <div style="margin-top:14px;">
+    <button id="saveMailBtn" onclick="saveMailSettings()">Save Email Settings</button>
+    <span id="mailStatus" style="margin-left:10px; font-size:13px;"></span>
+  </div>
+
+  <div style="margin-top:14px; display:flex; align-items:center; gap:8px;">
+    <input type="email" id="testEmailTo" placeholder="send test email to…" style="flex:1; padding:6px; box-sizing:border-box;">
+    <button onclick="sendTestEmail()">Send Test Email</button>
+  </div>
+  <div id="testEmailStatus" style="font-size:13px; margin-top:6px;"></div>
+
+  <div class="section-title" style="margin-top:32px;">WhatsApp Settings</div>
+  <div class="section-hint">
+    Used to send invoices to clients over WhatsApp. Two providers are wired up — <b>Twilio</b> and
+    <b>Meta's WhatsApp Cloud API</b> (direct, no middleman). Both stay fully configured; the
+    "Active Provider" dropdown just decides which one actually sends when you hit "Send via WhatsApp"
+    or the test button below.
+  </div>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    Active Provider
+    <select id="whatsappProvider" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+      <option value="twilio">Twilio</option>
+      <option value="meta">Meta (WhatsApp Cloud API)</option>
+    </select>
+  </label>
+
+  <div class="section-title" style="margin-top:22px; font-size:14px;">Option A — Twilio</div>
+  <div class="section-hint">
+    Sign up at <a href="https://console.twilio.com" target="_blank">console.twilio.com</a> to get an Account SID
+    and Auth Token, then enable WhatsApp (the free Sandbox works for testing; a Twilio-approved Sender is needed
+    for production). The "From" number must include the <code>whatsapp:</code> prefix, e.g.
+    <code>whatsapp:+14155238886</code>.
+  </div>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    Twilio Account SID
+    <input type="text" id="twilioAccountSid" placeholder="AC..." style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    Twilio Auth Token
+    <input type="password" id="twilioAuthToken" placeholder="your auth token" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+
+  <div style="display:flex; gap:14px; margin-top:10px;">
+    <label style="flex:1; font-size:13px;">WhatsApp From Number
+      <input type="text" id="twilioWhatsappFrom" placeholder="whatsapp:+14155238886" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+    <label style="flex:1; font-size:13px;">Default Country Code (used when a client's phone has none)
+      <input type="text" id="whatsappDefaultCountryCode" placeholder="91" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+  </div>
+
+  <div class="section-title" style="margin-top:22px; font-size:14px;">Option B — Meta (WhatsApp Cloud API)</div>
+  <div class="section-hint">
+    Sign up at <a href="https://developers.facebook.com" target="_blank">developers.facebook.com</a>, create an
+    App, add the WhatsApp product. API Setup gives you a Phone Number ID and a token (use a permanent System
+    User token for production, not the 24h temporary one). Business-initiated messages (every invoice
+    notification) need an approved <b>Message Template</b> — create one under WhatsApp &rarr; Message Templates
+    with 4 body variables to match Twilio's layout, or leave blank to use Meta's built-in <code>hello_world</code>
+    template for the test button only.
+  </div>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    Meta Access Token
+    <input type="password" id="metaWhatsappToken" placeholder="EAAG..." style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+
+  <div style="display:flex; gap:14px; margin-top:10px;">
+    <label style="flex:1; font-size:13px;">Phone Number ID
+      <input type="text" id="metaWhatsappPhoneNumberId" placeholder="1234567890" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+    <label style="flex:1; font-size:13px;">WhatsApp Business Account ID (optional)
+      <input type="text" id="metaWhatsappBusinessAccountId" placeholder="1234567890" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+  </div>
+
+  <div style="display:flex; gap:14px; margin-top:10px;">
+    <label style="flex:1; font-size:13px;">Message Template Name
+      <input type="text" id="metaWhatsappTemplateName" placeholder="invoice_notification" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+    <label style="flex:1; font-size:13px;">Template Language Code
+      <input type="text" id="metaWhatsappTemplateLang" placeholder="en_US" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+    </label>
+  </div>
+
+  <label style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px;">
+    <input type="checkbox" id="metaWhatsappHasDocHeader">
+    Template has a document header (attaches the invoice PDF, like Twilio's MediaUrl)
+  </label>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    Webhook Verify Token (for Meta App &rarr; WhatsApp &rarr; Configuration &rarr; Webhook)
+    <input type="text" id="metaWhatsappVerifyToken" placeholder="pick any random string" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;">
+  </label>
+  <div class="section-hint" style="margin-top:4px;">
+    Webhook callback URL: <code id="metaWebhookUrl">(set your Public Base URL below first)</code>
+  </div>
+
+  <label style="display:block; margin-top:14px; font-size:13px;">
+    Public Base URL (your backend's public URL, e.g. Railway URL — used to fetch the invoice PDF for either
+    provider, and as the base for the Meta webhook URL above)
+    <input type="url" id="publicBaseUrl" placeholder="https://your-app-name.up.railway.app" style="width:100%; padding:6px; margin-top:3px; box-sizing:border-box;" oninput="updateWebhookUrlPreview()">
+  </label>
+
+  <div style="margin-top:14px;">
+    <button id="saveWhatsappBtn" onclick="saveWhatsappSettings()">Save WhatsApp Settings</button>
+    <span id="whatsappStatus" style="margin-left:10px; font-size:13px;"></span>
+  </div>
+
+  <div style="margin-top:14px; display:flex; align-items:center; gap:8px;">
+    <input type="text" id="testWhatsappTo" placeholder="send test WhatsApp to… (e.g. +9198...)" style="flex:1; padding:6px; box-sizing:border-box;">
+    <button onclick="sendTestWhatsapp()">Send Test WhatsApp</button>
+  </div>
+  <div id="testWhatsappStatus" style="font-size:13px; margin-top:6px;"></div>
+</div>
+
+<script>
+let templates = [];
+let currentTemplate = null;
+let selectedTemplate = null;
+
+async function init() {
+  const listEl = document.getElementById("templateList");
+
+  try {
+    const [templatesRes, settingsRes] = await Promise.all([
+      fetch(API_BASE_URL + "/settings/invoice-templates").then(r => r.json()),
+      fetch(API_BASE_URL + "/settings").then(r => r.json())
+    ]);
+
+    templates = templatesRes.templates || [];
+    currentTemplate = settingsRes.invoice_template || (templates[0] && templates[0].id);
+    selectedTemplate = currentTemplate;
+
+    document.getElementById("companyName").value = settingsRes.company_name || "";
+    document.getElementById("companyGstin").value = settingsRes.company_gstin || "";
+    document.getElementById("companyAddress").value = settingsRes.company_address || "";
+    document.getElementById("annualTurnover").value = settingsRes.annual_turnover || "";
+
+    renderTemplates();
+  } catch (err) {
+    listEl.innerHTML = '<div class="error-msg">Could not load templates. Is the backend running?</div>';
+    console.error(err);
+  }
+}
+
+function renderTemplates() {
+  const listEl = document.getElementById("templateList");
+  listEl.innerHTML = "";
+
+  templates.forEach(t => {
+    const row = document.createElement("label");
+    row.className = "template-option" + (t.id === selectedTemplate ? " selected" : "");
+    row.innerHTML = `
+      <input type="radio" name="template" value="${t.id}" ${t.id === selectedTemplate ? "checked" : ""}>
+      <div>
+        <div class="template-name">${t.name}${t.id === currentTemplate ? "  (current)" : ""}</div>
+        <div class="template-desc">${t.description}</div>
+      </div>
+    `;
+    row.querySelector("input").addEventListener("change", () => {
+      selectedTemplate = t.id;
+      renderTemplates();
+    });
+    listEl.appendChild(row);
+  });
+
+  document.getElementById("saveBtn").disabled = (selectedTemplate === currentTemplate);
+}
+
+async function saveTemplate() {
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "Saving…";
+  statusEl.className = "";
+
+  try {
+    const res = await fetch(API_BASE_URL + "/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_template: selectedTemplate })
+    });
+
+    if (!res.ok) throw new Error("Save failed");
+
+    currentTemplate = selectedTemplate;
+    renderTemplates();
+    statusEl.textContent = "Saved. New sales invoices will use this template.";
+    statusEl.className = "ok";
+  } catch (err) {
+    statusEl.textContent = "Could not save settings.";
+    statusEl.className = "err";
+    console.error(err);
+  }
+}
+
+init();
+
+/* ---------------- COMPANY / GST PROFILE ---------------- */
+// Basic client-side shape check so people get quick feedback before the
+// round trip — the backend re-validates and is the actual source of truth.
+const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+async function saveCompanyProfile() {
+  const statusEl = document.getElementById("companyStatus");
+  const nameEl = document.getElementById("companyName");
+  const gstinEl = document.getElementById("companyGstin");
+  const addressEl = document.getElementById("companyAddress");
+  const turnoverEl = document.getElementById("annualTurnover");
+
+  const gstin = gstinEl.value.trim().toUpperCase();
+  gstinEl.value = gstin;
+
+  if (gstin && !GSTIN_PATTERN.test(gstin)) {
+    statusEl.textContent = "That doesn't look like a valid 15-character GSTIN (e.g. 27ABCDE1234F1Z5).";
+    statusEl.className = "err";
+    return;
+  }
+
+  if (turnoverEl.value !== "" && Number(turnoverEl.value) < 0) {
+    statusEl.textContent = "Annual turnover can't be negative.";
+    statusEl.className = "err";
+    return;
+  }
+
+  statusEl.textContent = "Saving…";
+  statusEl.className = "";
+
+  try {
+    const res = await fetch(API_BASE_URL + "/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company_name: nameEl.value.trim(),
+        company_gstin: gstin,
+        company_address: addressEl.value.trim(),
+        annual_turnover: turnoverEl.value
+      })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || "Save failed");
+
+    statusEl.textContent = "Saved. This will appear on new Sales Invoices as the seller.";
+    statusEl.className = "ok";
+  } catch (err) {
+    statusEl.textContent = err.message || "Could not save company profile.";
+    statusEl.className = "err";
+    console.error(err);
+  }
+}
+
+/* ---------------- EMAIL (BREVO) SETTINGS ---------------- */
+async function loadMailSettings() {
+  try {
+    const settings = await fetch(API_BASE_URL + "/settings").then(r => r.json());
+    // API key intentionally left blank; only overwritten if the user types a new one.
+    document.getElementById("mailFromName").value = settings.mail_from_name || "";
+    document.getElementById("mailFromEmail").value = settings.mail_from_email || "";
+  } catch (err) {
+    console.error("Failed to load email settings:", err);
+  }
+}
+
+async function saveMailSettings() {
+  const statusEl = document.getElementById("mailStatus");
+  statusEl.textContent = "Saving…";
+  statusEl.className = "";
+
+  const payload = {
+    mail_from_name: document.getElementById("mailFromName").value.trim(),
+    mail_from_email: document.getElementById("mailFromEmail").value.trim()
+  };
+
+  // Only send a key if the user actually typed one, so re-saving other
+  // fields doesn't require re-entering it every time.
+  const resendKey = document.getElementById("resendApiKey").value.trim();
+  if (resendKey) payload.resend_api_key = resendKey;
+  const brevoKey = document.getElementById("brevoApiKey").value.trim();
+  if (brevoKey) payload.brevo_api_key = brevoKey;
+  const sendgridKey = document.getElementById("sendgridApiKey").value.trim();
+  if (sendgridKey) payload.sendgrid_api_key = sendgridKey;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error("Save failed");
+
+    statusEl.textContent = "Email settings saved.";
+    statusEl.className = "ok";
+    document.getElementById("resendApiKey").value = "";
+    document.getElementById("brevoApiKey").value = "";
+    document.getElementById("sendgridApiKey").value = "";
+  } catch (err) {
+    statusEl.textContent = "Could not save email settings.";
+    statusEl.className = "err";
+    console.error(err);
+  }
+}
+
+async function sendTestEmail() {
+  const to = document.getElementById("testEmailTo").value.trim();
+  const statusEl = document.getElementById("testEmailStatus");
+
+  if (!to) {
+    statusEl.textContent = "Enter an email address first.";
+    statusEl.className = "err";
+    return;
+  }
+
+  statusEl.textContent = "Sending…";
+  statusEl.className = "";
+
+  try {
+    const res = await fetch(API_BASE_URL + "/settings/test-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to send");
+
+    statusEl.textContent = "Test email sent. Check the inbox.";
+    statusEl.className = "ok";
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = "err";
+  }
+}
+
+loadMailSettings();
+
+/* ---------------- WHATSAPP (TWILIO + META) SETTINGS ---------------- */
+function updateWebhookUrlPreview() {
+  const base = document.getElementById("publicBaseUrl").value.trim().replace(/\/$/, "");
+  document.getElementById("metaWebhookUrl").textContent = base
+    ? `${base}/webhooks/whatsapp`
+    : "(set your Public Base URL below first)";
+}
+
+async function loadWhatsappSettings() {
+  try {
+    const settings = await fetch(API_BASE_URL + "/settings").then(r => r.json());
+
+    document.getElementById("whatsappProvider").value = settings.whatsapp_provider || "twilio";
+
+    // Account SID isn't secret like the auth token, so it's fine to show back.
+    document.getElementById("twilioAccountSid").value = settings.twilio_account_sid || "";
+    document.getElementById("twilioWhatsappFrom").value = settings.twilio_whatsapp_from || "";
+    document.getElementById("whatsappDefaultCountryCode").value = settings.whatsapp_default_country_code || "";
+    document.getElementById("publicBaseUrl").value = settings.public_base_url || "";
+
+    // Access token is secret, left blank like the Twilio auth token.
+    document.getElementById("metaWhatsappPhoneNumberId").value = settings.meta_whatsapp_phone_number_id || "";
+    document.getElementById("metaWhatsappBusinessAccountId").value = settings.meta_whatsapp_business_account_id || "";
+    document.getElementById("metaWhatsappTemplateName").value = settings.meta_whatsapp_template_name || "";
+    document.getElementById("metaWhatsappTemplateLang").value = settings.meta_whatsapp_template_lang || "";
+    document.getElementById("metaWhatsappHasDocHeader").checked = settings.meta_whatsapp_template_has_doc_header === "true";
+    document.getElementById("metaWhatsappVerifyToken").value = settings.meta_whatsapp_verify_token || "";
+
+    updateWebhookUrlPreview();
+  } catch (err) {
+    console.error("Failed to load WhatsApp settings:", err);
+  }
+}
+
+async function saveWhatsappSettings() {
+  const statusEl = document.getElementById("whatsappStatus");
+  statusEl.textContent = "Saving…";
+  statusEl.className = "";
+
+  const payload = {
+    whatsapp_provider: document.getElementById("whatsappProvider").value,
+    twilio_account_sid: document.getElementById("twilioAccountSid").value.trim(),
+    twilio_whatsapp_from: document.getElementById("twilioWhatsappFrom").value.trim(),
+    whatsapp_default_country_code: document.getElementById("whatsappDefaultCountryCode").value.trim(),
+    public_base_url: document.getElementById("publicBaseUrl").value.trim(),
+    meta_whatsapp_phone_number_id: document.getElementById("metaWhatsappPhoneNumberId").value.trim(),
+    meta_whatsapp_business_account_id: document.getElementById("metaWhatsappBusinessAccountId").value.trim(),
+    meta_whatsapp_template_name: document.getElementById("metaWhatsappTemplateName").value.trim(),
+    meta_whatsapp_template_lang: document.getElementById("metaWhatsappTemplateLang").value.trim(),
+    meta_whatsapp_template_has_doc_header: document.getElementById("metaWhatsappHasDocHeader").checked ? "true" : "false",
+    meta_whatsapp_verify_token: document.getElementById("metaWhatsappVerifyToken").value.trim()
+  };
+
+  // Only send secrets if the user actually typed one, so re-saving other
+  // fields doesn't require re-entering them every time.
+  const authToken = document.getElementById("twilioAuthToken").value.trim();
+  if (authToken) payload.twilio_auth_token = authToken;
+
+  const metaToken = document.getElementById("metaWhatsappToken").value.trim();
+  if (metaToken) payload.meta_whatsapp_token = metaToken;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error("Save failed");
+
+    statusEl.textContent = "WhatsApp settings saved.";
+    statusEl.className = "ok";
+    document.getElementById("twilioAuthToken").value = "";
+    document.getElementById("metaWhatsappToken").value = "";
+  } catch (err) {
+    statusEl.textContent = "Could not save WhatsApp settings.";
+    statusEl.className = "err";
+    console.error(err);
+  }
+}
+
+async function sendTestWhatsapp() {
+  const to = document.getElementById("testWhatsappTo").value.trim();
+  const statusEl = document.getElementById("testWhatsappStatus");
+
+  if (!to) {
+    statusEl.textContent = "Enter a phone number first.";
+    statusEl.className = "err";
+    return;
+  }
+
+  statusEl.textContent = "Sending…";
+  statusEl.className = "";
+
+  try {
+    const res = await fetch(API_BASE_URL + "/settings/test-whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to send");
+
+    statusEl.textContent = `Test WhatsApp message sent to ${data.sentTo} via ${data.provider}.`;
+    statusEl.className = "ok";
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = "err";
+  }
+}
+
+loadWhatsappSettings();
+</script>
+
+</body>
+</html>

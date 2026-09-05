@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+<meta charset="UTF-8">
+<script src="config.js"></script>
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.drcr {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th { text-align: center; }
+.amount { text-align: right; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="header">
+  <h2 id="ledgerTitle">Ledger</h2>
+</div>
+
+<div class="drcr">
+  <strong>Dr.</strong>
+  <strong>Cr.</strong>
+</div>
+
+<div style="margin-bottom:10px; text-align:center;">
+  <label>From:
+    <input type="date" id="fromDate">
+  </label>
+  &nbsp;&nbsp;
+  <label>To:
+    <input type="date" id="toDate">
+  </label>
+  &nbsp;&nbsp;
+  <button onclick="loadLedger()">Apply</button>
+</div>
+
+<div style="text-align:center; margin-bottom:10px;">
+  <label><strong>Select Ledger:</strong></label>
+  <select id="ledgerSelect" onchange="loadLedger()" style="padding:5px;">
+    <option value="">-- Select Ledger --</option>
+  </select>
+</div>
+
+<table id="ledgerTable">
+<tr>
+  <th colspan="4">Debit</th>
+  <th colspan="4">Credit</th>
+</tr>
+<tr>
+  <th>Date</th><th>Particulars</th><th>Vch</th><th>Amount</th>
+  <th>Date</th><th>Particulars</th><th>Vch</th><th>Amount</th>
+</tr>
+</table>
+
+<script>
+const ledgerSelect = document.getElementById("ledgerSelect");
+const ledgerTitle = document.getElementById("ledgerTitle");
+const table = document.getElementById("ledgerTable");
+
+/* -------- LOAD LEDGER MASTER -------- */
+fetch(API_BASE_URL + "/ledger/master")
+  .then(res => res.json())
+  .then(data => {
+    data.forEach(l => {
+      const opt = document.createElement("option");
+      opt.value = l.ledger;
+      opt.textContent = l.ledger;
+      ledgerSelect.appendChild(opt);
+    });
+  });
+
+function parseDate(d) {
+  if (!d) return null;
+  const dt = new Date(d);
+  return isNaN(dt) ? null : dt;
+}
+
+function clearTable() {
+  while (table.rows.length > 2) table.deleteRow(2);
+}
+
+function loadLedger() {
+  const ledgerName = ledgerSelect.value;
+  if (!ledgerName) return;
+
+  ledgerTitle.textContent = ledgerName;
+  clearTable();
+
+  const fromVal = document.getElementById("fromDate").value;
+  const toVal = document.getElementById("toDate").value;
+
+  const fromDate = parseDate(fromVal);
+  const toDate = parseDate(toVal);
+
+  fetch(API_BASE_URL + `/ledger/${encodeURIComponent(ledgerName)}`)
+    .then(res => res.json())
+    .then(data => {
+
+      let openingBalance = 0;
+
+      // -------- CALCULATE OPENING BALANCE --------
+      data.forEach(e => {
+        const ed = parseDate(e.date);
+        if (fromDate && ed && ed < fromDate) {
+          openingBalance += (e.debit - e.credit);
+        }
+      });
+
+      // -------- FILTER PERIOD TRANSACTIONS --------
+      data = data.filter(e => {
+        const ed = parseDate(e.date);
+        if (!ed) return false;
+        if (fromDate && ed < fromDate) return false;
+        if (toDate && ed > toDate) return false;
+        return true;
+      });
+
+      const debits = data.filter(e => e.debit > 0);
+      const credits = data.filter(e => e.credit > 0);
+
+      let totalDebit = 0;
+      let totalCredit = 0;
+
+      // -------- OPENING BALANCE ROW --------
+      if (fromDate && openingBalance !== 0) {
+        const row = table.insertRow();
+
+        if (openingBalance > 0) {
+          row.innerHTML = `
+            <td></td>
+            <td><strong>To Balance b/d</strong></td>
+            <td></td>
+            <td class="amount"><strong>${openingBalance.toFixed(2)}</strong></td>
+            <td></td><td></td><td></td><td></td>
+          `;
+          totalDebit += openingBalance;
+        } else {
+          row.innerHTML = `
+            <td></td><td></td><td></td><td></td>
+            <td></td>
+            <td><strong>By Balance b/d</strong></td>
+            <td></td>
+            <td class="amount"><strong>${Math.abs(openingBalance).toFixed(2)}</strong></td>
+          `;
+          totalCredit += Math.abs(openingBalance);
+        }
+      }
+
+      const maxRows = Math.max(debits.length, credits.length);
+
+      // -------- PERIOD ENTRIES --------
+      for (let i = 0; i < maxRows; i++) {
+        const row = table.insertRow();
+
+        if (debits[i]) {
+          totalDebit += debits[i].debit;
+          row.innerHTML += `
+            <td>${debits[i].date}</td>
+            <td>${debits[i].narration || ""}</td>
+            <td>${debits[i].voucher_no}</td>
+            <td class="amount">${debits[i].debit.toFixed(2)}</td>
+          `;
+        } else {
+          row.innerHTML += "<td></td><td></td><td></td><td></td>";
+        }
+
+        if (credits[i]) {
+          totalCredit += credits[i].credit;
+          row.innerHTML += `
+            <td>${credits[i].date}</td>
+            <td>${credits[i].narration || ""}</td>
+            <td>${credits[i].voucher_no}</td>
+            <td class="amount">${credits[i].credit.toFixed(2)}</td>
+          `;
+        } else {
+          row.innerHTML += "<td></td><td></td><td></td><td></td>";
+        }
+      }
+
+      // -------- CLOSING BALANCE --------
+      const balance = totalDebit - totalCredit;
+      const closingRow = table.insertRow();
+
+      if (balance > 0) {
+        closingRow.innerHTML = `
+          <td></td>
+          <td><strong>To Balance c/d</strong></td>
+          <td></td>
+          <td class="amount"><strong>${balance.toFixed(2)}</strong></td>
+          <td></td><td></td><td></td><td></td>
+        `;
+        totalCredit += balance;
+      } else if (balance < 0) {
+        closingRow.innerHTML = `
+          <td></td><td></td><td></td><td></td>
+          <td></td>
+          <td><strong>By Balance c/d</strong></td>
+          <td></td>
+          <td class="amount"><strong>${Math.abs(balance).toFixed(2)}</strong></td>
+        `;
+        totalDebit += Math.abs(balance);
+      }
+
+      // -------- TOTALS --------
+      const totalRow = table.insertRow();
+      totalRow.innerHTML = `
+        <td></td>
+        <td><strong>Total</strong></td>
+        <td></td>
+        <td class="amount"><strong>${totalDebit.toFixed(2)}</strong></td>
+        <td></td>
+        <td><strong>Total</strong></td>
+        <td></td>
+        <td class="amount"><strong>${totalCredit.toFixed(2)}</strong></td>
+      `;
+    });
+}
+</script>
+
+</body>
+</html>

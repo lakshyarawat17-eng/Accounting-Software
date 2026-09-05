@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Debit Note Register</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.top-actions {
+  text-align: right;
+  margin-bottom: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+}
+.badge-linked { background: #0969da; }
+.badge-independent { background: #888; }
+
+.empty {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.detail-row td {
+  background: #fafafa;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">Debit Note Register</div>
+
+<div class="top-actions">
+  <a href="Debit Note.html"><button>➕ New Debit Note</button></a>
+</div>
+
+<table id="dnTable">
+  <tr>
+    <th>Note No</th>
+    <th>Date</th>
+    <th>Supplier</th>
+    <th>Against Invoice</th>
+    <th>Reason</th>
+    <th>Grand Total</th>
+    <th>Actions</th>
+  </tr>
+</table>
+<div id="emptyMsg" class="empty" style="display:none;">No debit notes yet.</div>
+
+<script>
+async function loadDebitNotes() {
+  const res = await fetch(API_BASE_URL + "/debit-note/list");
+  const list = await res.json();
+
+  const table = document.getElementById("dnTable");
+  const emptyMsg = document.getElementById("emptyMsg");
+
+  table.innerHTML = `
+    <tr>
+      <th>Note No</th>
+      <th>Date</th>
+      <th>Supplier</th>
+      <th>Against Invoice</th>
+      <th>Reason</th>
+      <th>Grand Total</th>
+      <th>Actions</th>
+    </tr>
+  `;
+
+  if (!list.length) {
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+
+  list.forEach(dn => {
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${dn.note_no}</td>
+      <td class="center">${dn.date}</td>
+      <td>${dn.supplier}</td>
+      <td class="center">
+        ${dn.linked_invoice_no
+          ? `<span class="badge badge-linked">${dn.linked_invoice_no}</span>`
+          : `<span class="badge badge-independent">Independent</span>`}
+      </td>
+      <td>${dn.reason || ""}</td>
+      <td class="amount">₹${dn.total_amount.toFixed(2)}</td>
+      <td class="center"><button onclick="toggleDetail(${dn.id}, this)">View Items</button></td>
+    `;
+  });
+}
+
+const openRows = {};
+
+async function toggleDetail(id, btn) {
+  const row = btn.closest("tr");
+
+  if (openRows[id]) {
+    openRows[id].remove();
+    delete openRows[id];
+    btn.textContent = "View Items";
+    return;
+  }
+
+  btn.textContent = "Loading...";
+  const res = await fetch(API_BASE_URL + `/debit-note/${id}`);
+  const dn = await res.json();
+  btn.textContent = "Hide Items";
+
+  const detailRow = document.createElement("tr");
+  detailRow.className = "detail-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 7;
+  cell.innerHTML = `
+    <table>
+      <tr>
+        <th>Item</th>
+        <th>Qty</th>
+        <th>Rate</th>
+        <th>Taxable</th>
+        <th>GST %</th>
+        <th>GST Amt</th>
+        <th>Total</th>
+      </tr>
+      ${dn.items.map(it => `
+        <tr>
+          <td>${it.item_name}</td>
+          <td class="center">${it.qty}</td>
+          <td class="amount">${it.rate.toFixed(2)}</td>
+          <td class="amount">${it.taxable.toFixed(2)}</td>
+          <td class="center">${it.gst_rate}%</td>
+          <td class="amount">${it.gst_amount.toFixed(2)}</td>
+          <td class="amount">${it.total.toFixed(2)}</td>
+        </tr>
+      `).join("")}
+    </table>
+    <div style="margin-top:6px;">
+      Taxable: ₹${dn.taxable_value.toFixed(2)}
+      ${dn.igst > 0 ? ` | IGST: ₹${dn.igst.toFixed(2)}` : ` | CGST: ₹${dn.cgst.toFixed(2)} | SGST: ₹${dn.sgst.toFixed(2)}`}
+      | Grand Total: ₹${dn.total_amount.toFixed(2)}
+      ${dn.adjusts_stock ? "" : " | (No stock impact)"}
+    </div>
+  `;
+  detailRow.appendChild(cell);
+  row.after(detailRow);
+  openRows[id] = detailRow;
+}
+
+loadDebitNotes();
+</script>
+
+</body>
+</html>
