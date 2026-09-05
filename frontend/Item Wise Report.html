@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Item Wise Report</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+h2 {
+  text-align: center;
+}
+select {
+  padding: 6px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  border: 1px solid #000;
+  padding: 6px;
+}
+th {
+  background: #f2f2f2;
+}
+.right { text-align: right; }
+.center { text-align: center; }
+.box {
+  border: 1px solid #000;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.box label {
+  margin-right: 20px;
+}
+.section-heading {
+  font-weight: bold;
+  margin-top: 6px;
+}
+.loc-row.current {
+  background: #eef6ff;
+  font-weight: bold;
+}
+.loc-row.inactive td {
+  color: #999;
+}
+.batch-row.current {
+  background: #eef6ff;
+  font-weight: bold;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: bold;
+}
+.badge-expired {
+  background: #ffdddd;
+  color: #a00;
+}
+.badge-near {
+  background: #fff3cd;
+  color: #8a6300;
+}
+.badge-low-stock {
+  background: #ffe3d1;
+  color: #a03c00;
+}
+.note {
+  font-size: 12px;
+  color: #666;
+  margin-top: 6px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Item Wise Stock Report</h2>
+
+<div class="box">
+  <label>Filter by Type:
+    <select id="typeFilter" onchange="renderItemOptions()">
+      <option value="">All Types</option>
+      <option value="RAW_MATERIAL">Raw Material</option>
+      <option value="WIP">WIP (Semi-Finished)</option>
+      <option value="FINISHED_GOOD">Finished Good</option>
+      <option value="CONSUMABLE">Consumable</option>
+      <option value="SCRAP">Scrap</option>
+    </select>
+  </label>
+  <label>Select Item:
+    <select id="itemSelect" onchange="loadReport()">
+      <option value="">-- Select Item --</option>
+    </select>
+  </label>
+  <label>Location:
+    <select id="locationFilter" onchange="loadReport()">
+      <option value="">All Locations</option>
+    </select>
+  </label>
+  <label>Batch:
+    <select id="batchFilter" onchange="loadReport()">
+      <option value="">All Batches</option>
+    </select>
+  </label>
+</div>
+
+<div class="box" id="summaryBox" style="display:none">
+  <b>Item:</b> <span id="itemName"></span><br>
+  <b>HSN:</b> <span id="hsn"></span><br>
+  <b>Unit:</b> <span id="unit"></span><br>
+  <b>GST %:</b> <span id="gst"></span><br><br>
+
+  <b id="summaryLabel">Total In:</b> <span id="inQty"></span><br>
+  <b>Total Out:</b> <span id="outQty"></span><br>
+  <b>Closing Stock:</b> <span id="closing"></span> <span id="lowStockBadge"></span><br>
+  <b>Reorder Level:</b> <span id="reorderLevel"></span> &nbsp;
+  <b>Reorder Qty:</b> <span id="reorderQty"></span>
+  <div class="note" id="scrapNote" style="display:none;"></div>
+</div>
+
+<div class="box" id="byLocationBox" style="display:none">
+  <div class="section-heading">Qty by Location</div>
+  <table id="byLocationTable">
+    <tr>
+      <th>Location</th>
+      <th>Qty In</th>
+      <th>Qty Out</th>
+      <th>Balance</th>
+    </tr>
+  </table>
+  <div class="note" id="unassignedNote" style="display:none;"></div>
+</div>
+
+<div class="box" id="byBatchBox" style="display:none">
+  <div class="section-heading">Qty by Batch</div>
+  <table id="byBatchTable">
+    <tr>
+      <th>Batch No</th>
+      <th>Expiry Date</th>
+      <th>Qty In</th>
+      <th>Qty Out</th>
+      <th>Balance</th>
+      <th>Status</th>
+    </tr>
+  </table>
+  <div class="note" id="unassignedBatchNote" style="display:none;"></div>
+</div>
+
+<div class="section-heading" id="movementsHeading">Movements</div>
+<table id="movementTable">
+  <tr>
+    <th>Date</th>
+    <th>Type</th>
+    <th>Voucher No</th>
+    <th>Location</th>
+    <th>Batch</th>
+    <th>Qty In</th>
+    <th>Qty Out</th>
+    <th>Rate</th>
+  </tr>
+</table>
+
+<script>
+let allItems = [];
+let allLocations = [];
+
+// How many days out a batch's expiry counts as "near expiry" (orange badge)
+// rather than "fine" (no badge) or "expired" (red badge, past today). Kept
+// as a single constant so both the by-batch summary panel and the
+// movements table's per-row flag agree on the same threshold.
+const NEAR_EXPIRY_DAYS = 30;
+
+function expiryStatus(expiryDate) {
+  if (!expiryDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exp = new Date(expiryDate);
+  if (isNaN(exp.getTime())) return null;
+  const daysLeft = Math.floor((exp - today) / 86400000);
+  if (daysLeft < 0) return { label: "Expired", cls: "badge-expired" };
+  if (daysLeft <= NEAR_EXPIRY_DAYS) return { label: `Near Expiry (${daysLeft}d)`, cls: "badge-near" };
+  return null;
+}
+
+async function loadItems() {
+  const res = await fetch(API_BASE_URL + "/report/items");
+  allItems = await res.json();
+  renderItemOptions();
+}
+
+async function loadLocations() {
+  const res = await fetch(API_BASE_URL + "/locations");
+  allLocations = await res.json();
+
+  const select = document.getElementById("locationFilter");
+  allLocations.forEach(l => {
+    const opt = document.createElement("option");
+    opt.value = l.id;
+    opt.textContent = l.location_name + (l.is_active ? "" : " (inactive)");
+    select.appendChild(opt);
+  });
+}
+
+// Rebuilds the item dropdown from allItems, restricted to the type
+// selected in typeFilter (or everything, if "All Types" is selected).
+// Items with no item_type set (old rows, pre-migration) fall back to
+// FINISHED_GOOD server-side, so they show up under that filter, not
+// under "All Types" only.
+function renderItemOptions() {
+  const filterValue = document.getElementById("typeFilter").value;
+  const select = document.getElementById("itemSelect");
+  const previousValue = select.value;
+
+  select.innerHTML = '<option value="">-- Select Item --</option>';
+
+  allItems
+    .filter(i => !filterValue || (i.item_type || "FINISHED_GOOD") === filterValue)
+    .forEach(i => {
+      const opt = document.createElement("option");
+      opt.value = i.id;
+      opt.textContent = i.item_name;
+      select.appendChild(opt);
+    });
+
+  // Keep the selection if the previously selected item still matches the
+  // new filter; otherwise reset and hide the report for the old selection.
+  if ([...select.options].some(o => o.value === previousValue)) {
+    select.value = previousValue;
+  } else {
+    document.getElementById("summaryBox").style.display = "none";
+    document.getElementById("byLocationBox").style.display = "none";
+    document.getElementById("byBatchBox").style.display = "none";
+  }
+}
+
+// Rebuilds the batch dropdown from this item's available_batches (Step 9's
+// report response) — batches are item-specific, so this is repopulated
+// every loadReport() call rather than loaded once up front like locations.
+// "__NONE__" is the sentinel the backend expects for "un-batched rows
+// only" (see /report/item/:itemId's batch_no query param). The current
+// selection is preserved across a re-render (e.g. after a location filter
+// change) as long as it still exists for this item; otherwise it resets to
+// "All Batches" so a stale batch_no from a previously selected item never
+// silently carries over.
+function renderBatchOptions(availableBatches) {
+  const select = document.getElementById("batchFilter");
+  const previousValue = select.value;
+
+  select.innerHTML = '<option value="">All Batches</option><option value="__NONE__">(No Batch)</option>';
+
+  (availableBatches || []).forEach(b => {
+    const opt = document.createElement("option");
+    opt.value = b.batch_no;
+    const status = expiryStatus(b.expiry_date);
+    opt.textContent = b.batch_no + (b.expiry_date ? ` (exp: ${b.expiry_date})` : "") + (status ? ` — ${status.label}` : "");
+    select.appendChild(opt);
+  });
+
+  if ([...select.options].some(o => o.value === previousValue)) {
+    select.value = previousValue;
+  } else {
+    select.value = "";
+  }
+}
+
+async function loadReport() {
+  const id = document.getElementById("itemSelect").value;
+  if (!id) {
+    document.getElementById("summaryBox").style.display = "none";
+    document.getElementById("byLocationBox").style.display = "none";
+    document.getElementById("byBatchBox").style.display = "none";
+    return;
+  }
+
+  const locationId = document.getElementById("locationFilter").value;
+  const batchNo = document.getElementById("batchFilter").value;
+
+  const params = new URLSearchParams();
+  if (locationId) params.set("location_id", locationId);
+  if (batchNo) params.set("batch_no", batchNo);
+  const qs = params.toString();
+  const url = API_BASE_URL + `/report/item/${id}` + (qs ? `?${qs}` : "");
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  renderBatchOptions(data.available_batches);
+
+  const s = data.summary;
+  document.getElementById("summaryBox").style.display = "block";
+  itemName.textContent = s.item_name;
+  hsn.textContent = s.hsn || "-";
+  unit.textContent = s.unit;
+  gst.textContent = s.gst_rate;
+  inQty.textContent = s.total_in;
+  outQty.textContent = s.total_out;
+  closing.textContent = s.closing_stock;
+  reorderLevel.textContent = s.reorder_level;
+  reorderQty.textContent = s.reorder_qty;
+
+  // Low-stock badge (Scrap & Reorder Alerts, Step 10): same badge styling
+  // as the expiry badges above, shown whenever this item is at or below
+  // its own reorder_level — reorder_level of 0 means alerts are disabled
+  // for this item (Step 1's convention), so no badge is possible then.
+  const lowStockBadgeEl = document.getElementById("lowStockBadge");
+  const isLowStock = Number(s.reorder_level) > 0 && Number(s.closing_stock) <= Number(s.reorder_level);
+  lowStockBadgeEl.innerHTML = isLowStock ? `<span class="badge badge-low-stock">Low Stock</span>` : "";
+
+  // Scrap total/note (Step 10): item-wide qty/value scrapped across every
+  // Work Order (data.scrap_summary, Step 5's wo_scrap table summed by
+  // item rather than by WO), surfaced right alongside stock health so
+  // wastage history doesn't require a separate screen. Omitted entirely
+  // when this item has never been scrapped — same convention as the
+  // unassigned/unassigned_batch notes.
+  const scrapNote = document.getElementById("scrapNote");
+  if (data.scrap_summary) {
+    scrapNote.style.display = "block";
+    scrapNote.textContent =
+      `Scrapped to date: ${data.scrap_summary.total_qty} unit(s), ` +
+      `valued at ₹${data.scrap_summary.total_value}.`;
+  } else {
+    scrapNote.style.display = "none";
+  }
+
+  // Label reflects whether the numbers above are item-wide or scoped to
+  // the selected location and/or batch, so it's never ambiguous which
+  // one is showing.
+  const locationName = locationId
+    ? (allLocations.find(l => String(l.id) === String(locationId))?.location_name || "selected location")
+    : null;
+  const batchLabel = batchNo
+    ? (batchNo === "__NONE__" ? "no batch" : batchNo)
+    : null;
+  const scopeParts = [locationName, batchLabel].filter(Boolean);
+  document.getElementById("summaryLabel").textContent = scopeParts.length
+    ? `Total In (${scopeParts.join(", ")}):`
+    : "Total In (all locations, all batches):";
+
+  renderByLocation(data.by_location, data.unassigned, locationId);
+  renderByBatch(data.by_batch, data.unassigned_batch, batchNo);
+  renderMovements(data.movements, !!locationId, !!batchNo);
+}
+
+function renderByLocation(byLocation, unassigned, selectedLocationId) {
+  const box = document.getElementById("byLocationBox");
+  const table = document.getElementById("byLocationTable");
+
+  if (!byLocation || !byLocation.length) {
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "block";
+  table.innerHTML = `
+    <tr>
+      <th>Location</th>
+      <th>Qty In</th>
+      <th>Qty Out</th>
+      <th>Balance</th>
+    </tr>
+  `;
+
+  byLocation.forEach(l => {
+    const row = table.insertRow();
+    const isCurrent = selectedLocationId && String(l.location_id) === String(selectedLocationId);
+    row.className = "loc-row" + (isCurrent ? " current" : "") + (l.is_active ? "" : " inactive");
+    row.innerHTML = `
+      <td>${l.location_name}${l.is_active ? "" : " (inactive)"}</td>
+      <td class="right">${l.total_in}</td>
+      <td class="right">${l.total_out}</td>
+      <td class="right">${l.balance}</td>
+    `;
+  });
+
+  const note = document.getElementById("unassignedNote");
+  if (unassigned) {
+    note.style.display = "block";
+    note.textContent =
+      `Note: ${unassigned.balance} unit(s) net are recorded with no location assigned ` +
+      `(qty in: ${unassigned.total_in}, qty out: ${unassigned.total_out}). Run the ` +
+      `stock-location backfill script or check for an unrecognised voucher type.`;
+  } else {
+    note.style.display = "none";
+  }
+}
+
+// Mirrors renderByLocation's shape (Step 10) — one row per batch this item
+// has ever been tagged with (data.by_batch, always the full breakdown
+// regardless of filters, per Step 9), with expiry called out via a badge
+// so ageing/near-expiry/expired stock is visible at a glance rather than
+// requiring the user to eyeball raw dates.
+function renderByBatch(byBatch, unassignedBatch, selectedBatchNo) {
+  const box = document.getElementById("byBatchBox");
+  const table = document.getElementById("byBatchTable");
+
+  if (!byBatch || !byBatch.length) {
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "block";
+  table.innerHTML = `
+    <tr>
+      <th>Batch No</th>
+      <th>Expiry Date</th>
+      <th>Qty In</th>
+      <th>Qty Out</th>
+      <th>Balance</th>
+      <th>Status</th>
+    </tr>
+  `;
+
+  byBatch.forEach(b => {
+    const row = table.insertRow();
+    const isCurrent = selectedBatchNo && selectedBatchNo !== "__NONE__" && String(b.batch_no) === String(selectedBatchNo);
+    row.className = "batch-row" + (isCurrent ? " current" : "");
+    const status = expiryStatus(b.expiry_date);
+    row.innerHTML = `
+      <td>${b.batch_no}</td>
+      <td>${b.expiry_date || "-"}</td>
+      <td class="right">${b.total_in}</td>
+      <td class="right">${b.total_out}</td>
+      <td class="right">${b.balance}</td>
+      <td class="center">${status ? `<span class="badge ${status.cls}">${status.label}</span>` : ""}</td>
+    `;
+  });
+
+  const note = document.getElementById("unassignedBatchNote");
+  if (unassignedBatch) {
+    note.style.display = "block";
+    note.textContent =
+      `Note: ${unassignedBatch.balance} unit(s) net are recorded with no batch assigned ` +
+      `(qty in: ${unassignedBatch.total_in}, qty out: ${unassignedBatch.total_out}) — stock ` +
+      `predating batch tracking, or received through a voucher type that doesn't capture a batch.`;
+  } else {
+    note.style.display = "none";
+  }
+}
+
+function renderMovements(movements, filteredByLocation, filteredByBatch) {
+  const heading = document.getElementById("movementsHeading");
+  const scopeParts = [];
+  if (filteredByLocation) scopeParts.push("location");
+  if (filteredByBatch) scopeParts.push("batch");
+  heading.textContent = scopeParts.length
+    ? `Movements (filtered to selected ${scopeParts.join(" & ")})`
+    : "Movements (all locations, all batches)";
+
+  const table = document.getElementById("movementTable");
+  table.innerHTML = `
+    <tr>
+      <th>Date</th>
+      <th>Type</th>
+      <th>Voucher No</th>
+      <th>Location</th>
+      <th>Batch</th>
+      <th>Qty In</th>
+      <th>Qty Out</th>
+      <th>Rate</th>
+    </tr>
+  `;
+
+  movements.forEach(m => {
+    const r = table.insertRow();
+    const status = expiryStatus(m.expiry_date);
+    const batchLabel = m.batch_no
+      ? m.batch_no + (status ? ` <span class="badge ${status.cls}">${status.label}</span>` : "")
+      : "-";
+    r.innerHTML = `
+      <td>${m.date}</td>
+      <td>${m.voucher_type}</td>
+      <td>${m.voucher_no}</td>
+      <td>${m.location_name || "-"}</td>
+      <td>${batchLabel}</td>
+      <td class="right">${m.qty_in || ""}</td>
+      <td class="right">${m.qty_out || ""}</td>
+      <td class="right">${m.rate || ""}</td>
+    `;
+  });
+}
+
+// Deep-link support (Scrap & Reorder Alerts, Step 9): the Main Menu's
+// Low Stock widget links each item straight here as
+// "Item Wise Report.html?item_id=<id>" so the user lands on that item's
+// report instead of an empty picker. Items/locations must finish loading
+// first since itemSelect's options don't exist until renderItemOptions()
+// has run; the option-membership check guards against a stale/invalid id
+// in the URL silently doing nothing rather than throwing.
+async function init() {
+  await loadItems();
+  await loadLocations();
+
+  const itemId = new URLSearchParams(window.location.search).get("item_id");
+  if (itemId) {
+    const select = document.getElementById("itemSelect");
+    if ([...select.options].some(o => o.value === itemId)) {
+      select.value = itemId;
+      loadReport();
+    }
+  }
+}
+init();
+</script>
+
+</body>
+</html>
