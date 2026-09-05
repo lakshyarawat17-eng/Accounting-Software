@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Tools</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #dbe3ee;
+      --accent: #1f5eff;
+      --accent-2: #0f766e;
+      --danger: #b91c1c;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    .sub { color: var(--muted); line-height: 1.5; max-width: 900px; }
+    .pill {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #e8eefc;
+      color: #1e3a8a;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 20px; }
+    .muted { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    label { display: block; font-weight: 700; font-size: 13px; margin: 12px 0 6px; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 220px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btnbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    button, .btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    button.primary, .btn.primary { background: var(--accent); color: white; }
+    button.secondary, .btn.secondary { background: #e5e7eb; color: #111827; }
+    button.teal, .btn.teal { background: var(--accent-2); color: white; }
+    .status {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px dashed var(--line);
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .status.ok { border-color: #86efac; background: #f0fdf4; }
+    .status.err { border-color: #fca5a5; background: #fef2f2; color: var(--danger); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; position: sticky; top: 0; }
+    .scroll { max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+    .two-col { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 18px; }
+    .export-list { display: grid; gap: 10px; }
+    .export-list a { width: 100%; }
+    .small { font-size: 12px; color: var(--muted); }
+    @media (max-width: 980px) {
+      .two-col { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <span class="pill">Local Admin Tools</span>
+        <h1>Audit Trail, Backup, Exports, Bank Reconciliation</h1>
+        <div class="sub">
+          Use this page to review automated audit logs, download a database backup, export master data as CSV, and import bank statements for local reconciliation against receipt/payment vouchers.
+        </div>
+      </div>
+      <a class="btn secondary" href="Main Menu.html">← Back to Main Menu</a>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Backup & Export</h2>
+        <div class="muted">Download the SQLite database, or export key masters and audit logs as CSV.</div>
+        <div class="btnbar">
+          <a class="btn primary" href="#" id="downloadBackup">Download Backup</a>
+          <a class="btn secondary" href="#" id="exportLedgers">Export Ledgers</a>
+          <a class="btn secondary" href="#" id="exportJournals">Export Journals</a>
+          <a class="btn secondary" href="#" id="exportPayments">Export Payments</a>
+          <a class="btn secondary" href="#" id="exportAudit">Export Audit CSV</a>
+        </div>
+        <div class="small" style="margin-top:10px;">These are local exports only; nothing goes to an external API.</div>
+      </div>
+
+      <div class="card">
+        <h2>Bank Reconciliation Import</h2>
+        <div class="muted">Paste a CSV with headers like <b>date,description,amount,reference</b>. Amount should be positive for credits and negative for debits, or include a direction column.</div>
+        <div class="row">
+          <div>
+            <label>Bank ledger</label>
+            <input id="bankLedger" value="Bank A/c" />
+          </div>
+          <div>
+            <label>Statement name</label>
+            <input id="statementName" placeholder="e.g. HDFC statement June 2026" />
+          </div>
+        </div>
+        <label>Statement CSV</label>
+        <textarea id="csvText" placeholder="date,description,amount,reference&#10;2026-06-01,NEFT from customer,25000,UTR123"></textarea>
+        <div class="btnbar">
+          <button class="primary" id="importBtn">Import & Reconcile</button>
+          <button class="secondary" id="refreshImports">Refresh Imports</button>
+        </div>
+        <div id="importStatus" class="status">Ready.</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <h2>Audit Trail</h2>
+        <div class="muted">Recent create/update/delete actions are captured automatically from the app.</div>
+        <div class="btnbar">
+          <button class="secondary" id="refreshAudit">Refresh Audit</button>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Entity</th>
+                <th>Action</th>
+                <th>Route</th>
+                <th>Status</th>
+                <th>Actor</th>
+              </tr>
+            </thead>
+            <tbody id="auditBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Imports & Matches</h2>
+        <div class="muted">Shows the latest bank statement imports and how many rows matched existing payment/receipt vouchers.</div>
+        <div class="btnbar">
+          <button class="secondary" id="refreshMatches">Refresh Imports</button>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Ledger</th>
+                <th>Name</th>
+                <th>Rows</th>
+                <th>Matched</th>
+                <th>Unmatched</th>
+              </tr>
+            </thead>
+            <tbody id="importsBody"></tbody>
+          </table>
+        </div>
+        <div id="importDetail" class="status" style="margin-top:12px;">Select an import to view details.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    const API = window.API_BASE_URL || "http://localhost:3000";
+
+    const statusBox = document.getElementById("importStatus");
+    const auditBody = document.getElementById("auditBody");
+    const importsBody = document.getElementById("importsBody");
+    const detailBox = document.getElementById("importDetail");
+
+    function fmt(v) {
+      if (v === null || v === undefined || v === "") return "-";
+      return String(v);
+    }
+
+    function setStatus(msg, ok = true) {
+      statusBox.className = "status " + (ok ? "ok" : "err");
+      statusBox.textContent = msg;
+    }
+
+    async function loadAudit() {
+      const rows = await fetch(`${API}/audit/logs?limit=100`).then(r => r.json());
+      auditBody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${fmt(r.event_time)}</td>
+          <td>${fmt(r.entity)}</td>
+          <td>${fmt(r.action)}</td>
+          <td>${fmt(r.route)}</td>
+          <td>${fmt(r.status_code)}</td>
+          <td>${fmt(r.actor)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6">No audit entries yet.</td></tr>`;
+    }
+
+    async function loadImports() {
+      const rows = await fetch(`${API}/bank-reconciliation/list`).then(r => r.json());
+      importsBody.innerHTML = rows.map(r => `
+        <tr style="cursor:pointer" data-id="${r.id}">
+          <td>${fmt(r.id)}</td>
+          <td>${fmt(r.bank_ledger)}</td>
+          <td>${fmt(r.statement_name)}</td>
+          <td>${fmt(r.total_rows || 0)}</td>
+          <td>${fmt(r.matched_rows || 0)}</td>
+          <td>${fmt(r.unmatched_rows || 0)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6">No imports yet.</td></tr>`;
+
+      importsBody.querySelectorAll("tr[data-id]").forEach(tr => {
+        tr.addEventListener("click", () => showImportDetail(tr.dataset.id));
+      });
+    }
+
+    async function showImportDetail(id) {
+      const data = await fetch(`${API}/bank-reconciliation/${id}`).then(r => r.json());
+      const lines = data.lines || [];
+      const headerHtml = `
+        <b>Import #${fmt(data.header.id)}</b><br>
+        Ledger: ${fmt(data.header.bank_ledger)}<br>
+        Statement: ${fmt(data.header.statement_name)}<br>
+        Rows: ${lines.length}
+      `;
+      let tableHtml = `<div style="margin-top:10px; font-weight:700;">Line details</div>
+        <div class="scroll" style="max-height:260px; margin-top:8px;">
+        <table><thead><tr><th>Date</th><th>Description</th><th>Ref</th><th>Amount</th><th>Status</th><th>Matched No.</th></tr></thead><tbody>`;
+      for (const l of lines) {
+        tableHtml += `<tr><td>${fmt(l.txn_date)}</td><td>${fmt(l.description)}</td><td>${fmt(l.reference_no)}</td><td>${fmt(l.amount)}</td><td>${fmt(l.status)}</td><td>${fmt(l.matched_no)}</td></tr>`;
+      }
+      tableHtml += `</tbody></table></div>`;
+      detailBox.className = "status ok";
+      detailBox.innerHTML = headerHtml + tableHtml;
+    }
+
+    async function importBankCsv() {
+      const payload = {
+        bankLedger: document.getElementById("bankLedger").value.trim(),
+        statementName: document.getElementById("statementName").value.trim(),
+        csvText: document.getElementById("csvText").value
+      };
+      setStatus("Importing and reconciling statement…", true);
+      try {
+        const res = await fetch(`${API}/bank-reconciliation/import`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Import failed");
+        setStatus(`Imported ${data.total_rows} row(s). Matched: ${data.matched_rows}. Unmatched: ${data.unmatched_rows}.`, true);
+        await loadImports();
+        await loadAudit();
+        await showImportDetail(data.import_id);
+      } catch (err) {
+        setStatus(err.message, false);
+      }
+    }
+
+    document.getElementById("downloadBackup").href = `${API}/backup/download`;
+    document.getElementById("exportLedgers").href = `${API}/exports/ledgers.csv`;
+    document.getElementById("exportJournals").href = `${API}/exports/journals.csv`;
+    document.getElementById("exportPayments").href = `${API}/exports/payments.csv`;
+    document.getElementById("exportAudit").href = `${API}/audit/export.csv`;
+
+    document.getElementById("importBtn").addEventListener("click", importBankCsv);
+    document.getElementById("refreshAudit").addEventListener("click", loadAudit);
+    document.getElementById("refreshMatches").addEventListener("click", loadImports);
+    document.getElementById("refreshImports").addEventListener("click", loadImports);
+
+    Promise.all([loadAudit(), loadImports()]).catch(err => {
+      setStatus(err.message, false);
+    });
+  </script>
+</body>
+</html>
