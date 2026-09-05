@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in – Books of Accounts</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+<script src="config.js"></script>
+<link rel="stylesheet" href="ui-theme.css" />
+<style>
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .login-wrap {
+    width: 100%;
+    max-width: 380px;
+  }
+  .login-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  .login-card {
+    padding: 30px 28px 26px;
+  }
+  .login-card h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .login-card .sub {
+    color: var(--muted);
+    font-size: 13.5px;
+    margin: 0 0 22px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  #loginBtn { width: 100%; margin-top: 6px; }
+  #loginError { display: none; }
+  #loginError.show { display: block; }
+  .login-footnote {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-logo">
+      <img src="assets/logo-lockup-compact.svg" alt="Books of Accounts" style="height:40px; width:auto;" />
+    </div>
+
+    <div class="login-card card">
+      <h1>Sign in</h1>
+      <p class="sub">Use your work email and password to access the books.</p>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required autocomplete="username" placeholder="you@company.com" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••" />
+        </div>
+
+        <div id="loginError" class="status err"></div>
+
+        <button type="submit" id="loginBtn" class="btn primary">Sign in</button>
+      </form>
+    </div>
+
+    <div class="login-footnote">Access is role-based — contact an administrator if you need an account or a different role.</div>
+  </div>
+
+  <script>
+    const API = window.API_BASE_URL;
+
+    function getNextPage() {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      // Only ever redirect to a same-folder .html page — never an
+      // absolute/external URL, to avoid this becoming an open redirect.
+      if (next && /^[A-Za-z0-9 _.%-]+\.html$/.test(next) && !next.includes("..")) {
+        return decodeURIComponent(next);
+      }
+      return "Main Menu.html";
+    }
+
+    // If a valid session already exists, skip the login form entirely.
+    (async function checkExistingSession() {
+      try {
+        const res = await fetch(`${API}/auth/me`, { credentials: "include" });
+        if (res.ok) {
+          window.location.replace(getNextPage());
+        }
+      } catch (e) {
+        // Backend unreachable — let the person try logging in anyway;
+        // the form submit will surface a clearer error.
+      }
+    })();
+
+    const form = document.getElementById("loginForm");
+    const errorBox = document.getElementById("loginError");
+    const loginBtn = document.getElementById("loginBtn");
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.classList.add("show");
+    }
+    function hideError() {
+      errorBox.classList.remove("show");
+    }
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      hideError();
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Signing in...";
+
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      try {
+        const res = await fetch(`${API}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          showError(data.error || "Sign in failed. Please try again.");
+          return;
+        }
+
+        window.location.replace(getNextPage());
+      } catch (err) {
+        showError("Couldn't reach the server. Check your connection and try again.");
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Sign in";
+      }
+    });
+  </script>
+</body>
+</html>

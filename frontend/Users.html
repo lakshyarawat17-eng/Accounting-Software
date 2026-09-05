@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<title>User Management</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 780px; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.form-grid .full { grid-column: 1 / -1; }
+label { display: block; margin-top: 12px; font-size: 14px; }
+input, select { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; font-family: inherit; }
+button { margin-top: 15px; padding: 6px 14px; cursor: pointer; }
+.btn-row { text-align: right; }
+.btn-row button { margin-left: 8px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid black; padding: 6px; font-size: 13px; }
+th { background: #f2f2f2; }
+#formTitle { margin-top: 0; }
+#statusMsg { margin-top: 10px; font-size: 13px; color: #a00; }
+#statusMsg.ok { color: #157a3d; }
+#searchBox { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+.role-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  background: #e8f0fb; color: #123b78; font-size: 11.5px; font-weight: bold;
+}
+.state-badge { font-size: 11.5px; font-weight: bold; padding: 2px 8px; border-radius: 999px; }
+.state-badge.active { background: #e9f7ee; color: #157a3d; }
+.state-badge.inactive { background: #fceeed; color: #b3261e; }
+.row-actions button { margin: 0 3px 3px 0; padding: 3px 8px; font-size: 12px; }
+.hint { font-size: 12px; color: #666; margin-top: 4px; }
+.rollout-badge { font-size: 11.5px; font-weight: bold; padding: 2px 8px; border-radius: 999px; }
+.rollout-badge.not_started { background: #f0f0f0; color: #555; }
+.rollout-badge.permissive { background: #fff4e0; color: #8a5a00; }
+.rollout-badge.tightened { background: #e9f7ee; color: #157a3d; }
+#rolloutPanel { margin-top: 30px; }
+#rolloutPanel h2 { margin-bottom: 4px; }
+#rolloutPanel .hint { margin-bottom: 12px; }
+#rolloutIntro { font-size: 13px; color: #444; margin: 10px 0; }
+#rolloutIntro button { padding: 6px 14px; cursor: pointer; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="container">
+  <h2 id="formTitle">Add User</h2>
+
+  <div class="form-grid">
+    <label class="full">
+      Full Name *
+      <input type="text" id="userName" autocomplete="off">
+    </label>
+
+    <label>
+      Email *
+      <input type="email" id="userEmail" autocomplete="off">
+    </label>
+
+    <label>
+      Role *
+      <select id="userRole"></select>
+    </label>
+
+    <label class="full" id="passwordField">
+      Password * <span class="hint">(at least 8 characters)</span>
+      <input type="password" id="userPassword" autocomplete="new-password">
+    </label>
+  </div>
+
+  <div id="statusMsg"></div>
+
+  <div class="btn-row">
+    <button id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">Cancel</button>
+    <button id="saveBtn" onclick="saveUser()">Add User</button>
+  </div>
+
+  <hr style="margin-top:25px;">
+
+  <label>
+    Search Users
+    <input type="text" id="searchBox" placeholder="Type a name or email to filter…">
+  </label>
+
+  <table id="usersTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Last Login</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="container" id="rolloutPanel">
+  <h2>Rollout &amp; Access Status</h2>
+  <div class="hint">
+    Step 10 — controls how strictly permission-matrix.js is enforced. See
+    backend/rbac/README.md ("Step 10: Staged Rollout") for the full runbook.
+  </div>
+
+  <div id="rolloutIntro"></div>
+
+  <table id="rolloutTable">
+    <thead>
+      <tr>
+        <th>Module</th>
+        <th>Status</th>
+        <th>Tightened</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let allUsers = [];
+let allRoles = [];
+let editingId = null;
+
+/* ---------------- LOAD ROLES (for the dropdown) ---------------- */
+async function loadRoles() {
+  try {
+    const res = await fetch(API_BASE_URL + "/roles");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    allRoles = await res.json();
+    const select = document.getElementById("userRole");
+    select.innerHTML = allRoles.map(r => `<option value="${r.key}">${r.label}</option>`).join("");
+  } catch (err) {
+    console.error("ROLE LOAD ERROR:", err);
+    document.getElementById("statusMsg").textContent = "Couldn't load roles — check the server connection.";
+  }
+}
+
+/* ---------------- LOAD USERS ---------------- */
+async function loadUsers() {
+  try {
+    const res = await fetch(API_BASE_URL + "/users");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    allUsers = await res.json();
+    renderTable(allUsers);
+  } catch (err) {
+    console.error("USER LOAD ERROR:", err);
+    document.querySelector("#usersTable tbody").innerHTML =
+      `<tr><td colspan="6">Failed to load users</td></tr>`;
+  }
+}
+
+function formatDate(iso) {
+  if (!iso) return "Never";
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleString();
+}
+
+function renderTable(rows) {
+  const tbody = document.querySelector("#usersTable tbody");
+  tbody.innerHTML = "";
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6">No users yet</td></tr>`;
+    return;
+  }
+
+  rows.forEach(u => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${u.name}</td>
+      <td>${u.email}</td>
+      <td><span class="role-badge">${u.role.label}</span></td>
+      <td><span class="state-badge ${u.is_active ? 'active' : 'inactive'}">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+      <td>${formatDate(u.last_login_at)}</td>
+      <td class="row-actions">
+        <button type="button" data-action="edit">Edit</button>
+        <button type="button" data-action="toggle">${u.is_active ? 'Deactivate' : 'Reactivate'}</button>
+        <button type="button" data-action="reset">Reset Password</button>
+      </td>
+    `;
+    tr.querySelector('[data-action="edit"]').addEventListener("click", () => startEdit(u));
+    tr.querySelector('[data-action="toggle"]').addEventListener("click", () => toggleStatus(u));
+    tr.querySelector('[data-action="reset"]').addEventListener("click", () => resetPassword(u));
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------------- SEARCH / FILTER ---------------- */
+document.getElementById("searchBox").addEventListener("input", () => {
+  const q = document.getElementById("searchBox").value.trim().toLowerCase();
+  if (!q) return renderTable(allUsers);
+  renderTable(allUsers.filter(u =>
+    u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  ));
+});
+
+/* ---------------- EDIT MODE ---------------- */
+function startEdit(u) {
+  editingId = u.id;
+  document.getElementById("formTitle").textContent = "Edit User";
+  document.getElementById("userName").value = u.name || "";
+  document.getElementById("userEmail").value = u.email || "";
+  document.getElementById("userRole").value = u.role.key;
+  document.getElementById("passwordField").style.display = "none"; // edit doesn't touch the password
+  document.getElementById("saveBtn").textContent = "Update User";
+  document.getElementById("cancelEditBtn").style.display = "inline-block";
+  document.getElementById("statusMsg").textContent = "";
+  document.getElementById("statusMsg").className = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById("formTitle").textContent = "Add User";
+  document.getElementById("userName").value = "";
+  document.getElementById("userEmail").value = "";
+  document.getElementById("userRole").selectedIndex = 0;
+  document.getElementById("userPassword").value = "";
+  document.getElementById("passwordField").style.display = "";
+  document.getElementById("saveBtn").textContent = "Add User";
+  document.getElementById("cancelEditBtn").style.display = "none";
+  document.getElementById("statusMsg").textContent = "";
+  document.getElementById("statusMsg").className = "";
+}
+
+/* ---------------- SAVE / UPDATE ---------------- */
+async function saveUser() {
+  const statusMsg = document.getElementById("statusMsg");
+  statusMsg.className = "";
+
+  const payload = {
+    name: document.getElementById("userName").value.trim(),
+    email: document.getElementById("userEmail").value.trim(),
+    role_key: document.getElementById("userRole").value
+  };
+
+  if (!payload.name) { statusMsg.textContent = "Name is required"; return; }
+  if (!payload.email) { statusMsg.textContent = "Email is required"; return; }
+
+  let url, method;
+  if (editingId) {
+    url = API_BASE_URL + "/users/" + editingId;
+    method = "PUT";
+  } else {
+    const password = document.getElementById("userPassword").value;
+    if (!password || password.length < 8) {
+      statusMsg.textContent = "Password must be at least 8 characters";
+      return;
+    }
+    payload.password = password;
+    url = API_BASE_URL + "/users";
+    method = "POST";
+  }
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Save failed");
+
+    cancelEdit();
+    loadUsers();
+  } catch (err) {
+    console.error("SAVE USER ERROR:", err);
+    statusMsg.textContent = err.message;
+  }
+}
+
+/* ---------------- ACTIVATE / DEACTIVATE ---------------- */
+async function toggleStatus(u) {
+  const goingActive = !u.is_active;
+  const verb = goingActive ? "reactivate" : "deactivate";
+  if (!confirm(`${verb.charAt(0).toUpperCase() + verb.slice(1)} ${u.name}?` +
+    (goingActive ? "" : " They'll be signed out immediately and won't be able to log back in."))) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/users/" + u.id + "/status", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: goingActive })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Update failed");
+    loadUsers();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+/* ---------------- RESET PASSWORD ---------------- */
+async function resetPassword(u) {
+  const pwd = prompt(`New password for ${u.name} (at least 8 characters).\nThey'll be signed out of any existing session.`);
+  if (pwd === null) return; // cancelled
+  if (pwd.length < 8) { alert("Password must be at least 8 characters"); return; }
+
+  try {
+    const res = await fetch(API_BASE_URL + "/users/" + u.id + "/password", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pwd })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Reset failed");
+    const statusMsg = document.getElementById("statusMsg");
+    statusMsg.className = "ok";
+    statusMsg.textContent = `Password reset for ${u.name}.`;
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+/* ---------------- STEP 10: ROLLOUT & ACCESS STATUS ---------------- */
+const ROLLOUT_LABELS = { not_started: "Not started", permissive: "Permissive (temporary)", tightened: "Tightened" };
+
+async function loadRolloutStatus() {
+  try {
+    const res = await fetch(API_BASE_URL + "/rbac/rollout/status");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const { status } = await res.json();
+    renderRolloutPanel(status);
+  } catch (err) {
+    console.error("ROLLOUT STATUS ERROR:", err);
+    document.getElementById("rolloutIntro").textContent =
+      "Couldn't load rollout status — check the server connection.";
+  }
+}
+
+function renderRolloutPanel(rows) {
+  const anyStarted = rows.some(r => r.status !== "not_started");
+  const allTightened = rows.every(r => r.status === "tightened");
+
+  const intro = document.getElementById("rolloutIntro");
+  if (allTightened) {
+    intro.innerHTML = `<strong>Rollout complete.</strong> Every module matches permission-matrix.js exactly. Remember to deactivate any leftover <code>test.*</code> QA accounts.`;
+  } else if (!anyStarted) {
+    intro.innerHTML = `
+      No rollout in progress — modules currently follow permission-matrix.js as-is.
+      Starting a rollout temporarily grants every role full access to every business
+      module (Administration excluded) so it's safe to turn on enforcement without
+      locking anyone out, then you tighten modules back down one at a time below.
+      <br><button type="button" id="startRolloutBtn">Start permissive rollout</button>
+    `;
+    document.getElementById("startRolloutBtn").addEventListener("click", startRollout);
+  } else {
+    intro.innerHTML = `Rollout in progress — tighten each remaining module below once it's been tested. <button type="button" id="tightenAllBtn">Tighten all remaining</button>`;
+    document.getElementById("tightenAllBtn").addEventListener("click", tightenAllModules);
+  }
+
+  const tbody = document.querySelector("#rolloutTable tbody");
+  tbody.innerHTML = "";
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.label}</td>
+      <td><span class="rollout-badge ${r.status}">${ROLLOUT_LABELS[r.status] || r.status}</span></td>
+      <td>${r.tightened_at ? formatDate(r.tightened_at) + (r.tightened_by ? " by " + r.tightened_by : "") : "—"}</td>
+      <td class="row-actions"></td>
+    `;
+    const actionCell = tr.querySelector(".row-actions");
+    if (r.status !== "tightened") {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Tighten";
+      btn.disabled = r.status === "not_started"; // nothing to tighten from until rollout has started
+      btn.title = r.status === "not_started" ? "Start the rollout first" : "";
+      btn.addEventListener("click", () => tightenModule(r.module));
+      actionCell.appendChild(btn);
+    }
+    tbody.appendChild(tr);
+  });
+}
+
+async function startRollout() {
+  if (!confirm(
+    "This grants every role full access to every business module (Administration " +
+    "excluded) until you tighten each one back down. Only do this right before " +
+    "setting RBAC_ENFORCE=true, or if it's already on. Continue?"
+  )) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/rbac/rollout/start", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to start rollout");
+    renderRolloutPanel(data.status);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function tightenModule(moduleKey) {
+  if (!confirm(`Tighten '${moduleKey}' to its real permission-matrix.js values now? Test that module's roles first if you haven't.`)) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/rbac/rollout/tighten/" + encodeURIComponent(moduleKey), { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to tighten module");
+    renderRolloutPanel(data.status);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function tightenAllModules() {
+  if (!confirm("Tighten every remaining module to permission-matrix.js values now?")) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + "/rbac/rollout/tighten-all", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to tighten modules");
+    renderRolloutPanel(data.status);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+/* ---------------- INIT ---------------- */
+window.addEventListener("DOMContentLoaded", async () => {
+  await loadRoles();
+  await loadUsers();
+  await loadRolloutStatus();
+});
+</script>
+
+</body>
+</html>

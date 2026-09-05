@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<title>Payment / Receipt</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+.totals-box {
+  margin-top: 10px;
+  text-align: right;
+}
+.totals-box div {
+  margin: 2px 0;
+}
+.totals-box .grand {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+/* Type toggle */
+.type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+}
+.type-toggle button {
+  flex: 1;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  border: 1px solid black;
+  background: white;
+  cursor: pointer;
+}
+.type-toggle button.active {
+  background: #333;
+  color: white;
+}
+.type-toggle button:first-child { border-right: none; }
+
+.unallocated-warning {
+  background: #fff8e1;
+  border: 1px solid #d4a017;
+  padding: 8px;
+  margin-top: 8px;
+  display: none;
+}
+
+.empty-msg {
+  color: #666;
+  font-style: italic;
+  padding: 10px;
+}
+
+#historyTable td.small { font-size: 12px; color: #555; }
+button.reverse-btn {
+  background: #fff0f0;
+  border: 1px solid #c00;
+  color: #c00;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="title">Payment / Receipt Voucher</div>
+
+<!-- TYPE TOGGLE -->
+<div class="type-toggle">
+  <button id="btnPayment" class="active" onclick="setType('PAYMENT')">💸 Payment (to Supplier)</button>
+  <button id="btnReceipt" onclick="setType('RECEIPT')">💰 Receipt (from Customer)</button>
+</div>
+
+<!-- HEADER -->
+<div class="section-box">
+  <div class="section-title" id="headerTitle">Payment Details</div>
+
+  <label>Date:
+    <input type="date" id="voucherDate">
+  </label>
+
+  <label id="partyLabel">Supplier:
+    <select id="partySelect">
+      <option value="">-- Select --</option>
+    </select>
+  </label>
+
+  <label id="modeLabel">Paid Through:
+    <select id="modeLedger">
+      <option value="">-- Select --</option>
+    </select>
+  </label>
+
+  <label>Amount ₹:
+    <input type="number" id="amountInput" step="0.01" min="0" onchange="renderOutstanding()">
+  </label>
+
+  <br><br>
+  <label style="margin-right:0;">Narration (optional):
+    <input type="text" id="narrationInput" style="width:400px;">
+  </label>
+</div>
+
+<!-- OUTSTANDING / ALLOCATION -->
+<div class="section-box">
+  <div class="section-title" id="outstandingTitle">Outstanding Invoices</div>
+  <div id="outstandingArea">
+    <div class="empty-msg">Select a party to see their outstanding invoices.</div>
+  </div>
+
+  <div class="totals-box">
+    <div>Total Allocated: ₹<span id="allocatedTotal">0.00</span></div>
+    <div class="grand">Payment Amount: ₹<span id="amountEcho">0.00</span></div>
+  </div>
+
+  <div class="unallocated-warning" id="unallocWarning">
+    ⚠️ Some of this amount is not allocated to any invoice — it will be recorded as an advance against this party.
+  </div>
+</div>
+
+<!-- SAVE -->
+<div class="section-box">
+  <button onclick="savePayment()">Save Voucher</button>
+</div>
+
+<!-- HISTORY -->
+<div class="section-box">
+  <div class="section-title">Recent Payments & Receipts</div>
+  <table id="historyTable">
+    <tr>
+      <th>Voucher No</th>
+      <th>Type</th>
+      <th>Date</th>
+      <th>Party</th>
+      <th>Mode</th>
+      <th>Amount</th>
+      <th></th>
+    </tr>
+  </table>
+</div>
+
+<script>
+let currentType = "PAYMENT";
+let outstandingInvoices = []; // [{id, invoice_no, date, total_amount, balance, allocated}]
+
+const partySelect = document.getElementById("partySelect");
+const modeLedger = document.getElementById("modeLedger");
+const amountInput = document.getElementById("amountInput");
+const voucherDate = document.getElementById("voucherDate");
+
+window.addEventListener("DOMContentLoaded", () => {
+  voucherDate.valueAsDate = new Date();
+  loadModeLedgers();
+  setType("PAYMENT");
+  loadHistory();
+});
+
+function setType(type) {
+  currentType = type;
+  document.getElementById("btnPayment").classList.toggle("active", type === "PAYMENT");
+  document.getElementById("btnReceipt").classList.toggle("active", type === "RECEIPT");
+  document.getElementById("headerTitle").textContent = type === "PAYMENT" ? "Payment Details" : "Receipt Details";
+  document.getElementById("partyLabel").firstChild.textContent = type === "PAYMENT" ? "Supplier: " : "Customer: ";
+  document.getElementById("modeLabel").firstChild.textContent = type === "PAYMENT" ? "Paid Through: " : "Received Into: ";
+  document.getElementById("outstandingTitle").textContent =
+    type === "PAYMENT" ? "Outstanding Purchase Invoices" : "Outstanding Sales Invoices";
+  outstandingInvoices = [];
+  loadParties();
+  renderOutstanding();
+}
+
+async function loadParties() {
+  const url = currentType === "PAYMENT" ? "/parties/suppliers" : "/parties/customers";
+  partySelect.innerHTML = `<option value="">-- Select --</option>`;
+  try {
+    const res = await fetch(API_BASE_URL + url);
+    const list = await res.json();
+    list.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.name;
+      opt.textContent = p.name;
+      partySelect.appendChild(opt);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function loadModeLedgers() {
+  // Cash A/c and Bank A/c are seeded system ledgers; also allow picking
+  // any other ledger (e.g. a specific bank account) if one has been set up.
+  try {
+    const res = await fetch(API_BASE_URL + "/ledger/master");
+    const list = await res.json();
+    modeLedger.innerHTML = `<option value="">-- Select --</option>`;
+    list.forEach(l => {
+      const opt = document.createElement("option");
+      opt.value = l.ledger;
+      opt.textContent = l.ledger;
+      if (l.ledger === "Cash A/c") opt.selected = true;
+      modeLedger.appendChild(opt);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+partySelect.addEventListener("change", async () => {
+  const party = partySelect.value;
+  const area = document.getElementById("outstandingArea");
+  outstandingInvoices = [];
+
+  if (!party) {
+    area.innerHTML = `<div class="empty-msg">Select a party to see their outstanding invoices.</div>`;
+    renderOutstanding();
+    return;
+  }
+
+  area.innerHTML = `<div class="empty-msg">Loading...</div>`;
+
+  const url = currentType === "PAYMENT"
+    ? `/payables/outstanding?supplier=${encodeURIComponent(party)}`
+    : `/receivables/outstanding?customer=${encodeURIComponent(party)}`;
+
+  try {
+    const res = await fetch(API_BASE_URL + url);
+    const list = await res.json();
+    outstandingInvoices = list.map(inv => ({ ...inv, allocated: 0 }));
+    renderOutstanding();
+  } catch (e) {
+    area.innerHTML = `<div class="empty-msg">Could not load outstanding invoices.</div>`;
+  }
+});
+
+// Default allocation strategy: fill oldest invoices first, up to the
+// entered amount. Still fully editable per-row afterwards.
+function autoAllocate() {
+  let remaining = Number(amountInput.value) || 0;
+  outstandingInvoices.forEach(inv => {
+    if (remaining <= 0) { inv.allocated = 0; return; }
+    const take = Math.min(inv.balance, remaining);
+    inv.allocated = Math.round(take * 100) / 100;
+    remaining -= inv.allocated;
+  });
+}
+
+function renderOutstanding() {
+  const area = document.getElementById("outstandingArea");
+
+  if (!outstandingInvoices.length) {
+    if (partySelect.value) {
+      area.innerHTML = `<div class="empty-msg">No outstanding invoices for this party — any amount entered will be recorded as an advance.</div>`;
+    }
+    updateTotals();
+    return;
+  }
+
+  autoAllocate();
+
+  area.innerHTML = `
+    <table>
+      <tr>
+        <th>Invoice No</th>
+        <th>Date</th>
+        <th>Invoice Total</th>
+        <th>Balance Due</th>
+        <th>Allocate ₹</th>
+      </tr>
+      ${outstandingInvoices.map((inv, idx) => `
+        <tr>
+          <td>${inv.invoice_no}</td>
+          <td class="center">${inv.date}</td>
+          <td class="amount">${inv.total_amount.toFixed(2)}</td>
+          <td class="amount">${inv.balance.toFixed(2)}</td>
+          <td class="amount">
+            <input type="number" step="0.01" min="0" max="${inv.balance}"
+                   value="${inv.allocated}" style="width:100px; text-align:right;"
+                   data-idx="${idx}" onchange="editAllocation(this)">
+          </td>
+        </tr>
+      `).join("")}
+    </table>
+  `;
+
+  updateTotals();
+}
+
+function editAllocation(input) {
+  const idx = Number(input.dataset.idx);
+  let val = Number(input.value) || 0;
+  const inv = outstandingInvoices[idx];
+  if (val > inv.balance) {
+    alert(`Cannot allocate more than the ₹${inv.balance.toFixed(2)} outstanding on ${inv.invoice_no}`);
+    val = inv.balance;
+    input.value = val;
+  }
+  inv.allocated = val;
+  updateTotals();
+}
+
+function updateTotals() {
+  const amount = Number(amountInput.value) || 0;
+  const allocated = outstandingInvoices.reduce((s, i) => s + (Number(i.allocated) || 0), 0);
+  document.getElementById("allocatedTotal").textContent = allocated.toFixed(2);
+  document.getElementById("amountEcho").textContent = amount.toFixed(2);
+  document.getElementById("unallocWarning").style.display =
+    (amount - allocated > 0.005) ? "block" : "none";
+}
+
+async function savePayment() {
+  const party = partySelect.value;
+  const mode = modeLedger.value;
+  const amount = Number(amountInput.value) || 0;
+  const date = voucherDate.value;
+  const narration = document.getElementById("narrationInput").value.trim();
+
+  if (!party) { alert(currentType === "PAYMENT" ? "Select a supplier" : "Select a customer"); return; }
+  if (!mode) { alert("Select which ledger this was paid through / received into"); return; }
+  if (!date) { alert("Select a date"); return; }
+  if (amount <= 0) { alert("Enter a valid amount"); return; }
+
+  const allocations = outstandingInvoices
+    .filter(inv => Number(inv.allocated) > 0)
+    .map(inv => ({
+      invoice_type: currentType === "PAYMENT" ? "PURCHASE" : "SALES",
+      invoice_id: inv.id,
+      allocated_amount: Number(inv.allocated)
+    }));
+
+  const allocSum = allocations.reduce((s, a) => s + a.allocated_amount, 0);
+  if (allocSum > amount + 0.005) {
+    alert("Allocated amounts exceed the payment amount");
+    return;
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + "/payment/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: currentType, date, party, mode_ledger: mode, amount, narration, allocations })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+
+    alert(`${currentType === "PAYMENT" ? "Payment" : "Receipt"} saved — Voucher ${data.voucher_no}`);
+
+    // Reset for next entry
+    amountInput.value = "";
+    document.getElementById("narrationInput").value = "";
+    partySelect.value = "";
+    outstandingInvoices = [];
+    renderOutstanding();
+    loadHistory();
+  } catch (e) {
+    alert("Could not save: " + e.message);
+  }
+}
+
+async function loadHistory() {
+  const table = document.getElementById("historyTable");
+  try {
+    const res = await fetch(API_BASE_URL + "/payment/list");
+    const list = await res.json();
+    table.innerHTML = `
+      <tr>
+        <th>Voucher No</th>
+        <th>Type</th>
+        <th>Date</th>
+        <th>Party</th>
+        <th>Mode</th>
+        <th>Amount</th>
+        <th></th>
+      </tr>
+    `;
+    list.slice(0, 25).forEach(p => {
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td>${p.voucher_no}</td>
+        <td class="center">${p.type}</td>
+        <td class="center">${p.date}</td>
+        <td>${p.party}</td>
+        <td>${p.mode_ledger}</td>
+        <td class="amount">${p.amount.toFixed(2)}</td>
+        <td class="center"><button class="reverse-btn" onclick="reversePayment(${p.id})">Reverse</button></td>
+      `;
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function reversePayment(id) {
+  if (!confirm("Reverse this voucher? This deletes its journal entry and frees up the invoice(s) it was allocated to.")) return;
+  try {
+    const res = await fetch(API_BASE_URL + `/payment/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    loadHistory();
+    if (partySelect.value) partySelect.dispatchEvent(new Event("change"));
+  } catch (e) {
+    alert("Could not reverse: " + e.message);
+  }
+}
+</script>
+
+</body>
+</html>

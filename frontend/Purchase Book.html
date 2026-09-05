@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<title>Purchase Book</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+#suggestions, #supplierSuggestions {
+  border: 1px solid #aaa;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  background: white;
+  z-index: 10;
+}
+#supplierSuggestions {
+  width: 260px;
+  display: none;
+}
+#suggestions div, #supplierSuggestions div {
+  padding: 6px;
+  cursor: pointer;
+}
+#suggestions div:hover, #supplierSuggestions div:hover {
+  background: #eee;
+}
+
+.totals-box {
+  margin-top: 10px;
+  text-align: right;
+}
+.totals-box div {
+  margin: 2px 0;
+}
+.totals-box .grand {
+  font-weight: bold;
+  font-size: 15px;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<div class="title">Purchase Book</div>
+
+<div class="section-box" id="poBanner" style="display:none; background:#eef6ff;">
+  📦 Invoicing against Purchase Order <b id="poBannerNo"></b> — items below were pulled in from goods already received against it.
+</div>
+
+<!-- 1️⃣ PURCHASE HEADER -->
+<div class="section-box">
+  <div class="section-title">Purchase Details</div>
+
+  <label>Date:
+    <input type="date" id="purchaseDate">
+  </label>
+
+  <label style="position:relative;">Supplier:
+    <input type="text" id="supplier" placeholder="Search or type supplier name" autocomplete="off">
+    <div id="supplierSuggestions"></div>
+  </label>
+  <span id="supplierInfoLine" style="font-size:12px; color:#555;"></span>
+
+  <label>Invoice No:
+    <input type="text" id="invoiceNo" placeholder="PINV-0001">
+  </label>
+
+  <label>Purchase Type:
+    <select id="taxType">
+      <option value="INTRA">Same State (CGST + SGST)</option>
+      <option value="INTER">Different State (IGST)</option>
+    </select>
+  </label>
+</div>
+
+<!-- 2️⃣ ADD ITEM -->
+<div class="section-box" id="addItemBox">
+  <div class="section-title">Add Item</div>
+
+  <label>Item:
+    <input type="text" id="itemSearch" placeholder="Search item">
+    <div id="suggestions"></div>
+  </label>
+
+  <label>Qty:
+    <input type="number" id="itemQty" value="1">
+  </label>
+
+  <label>Rate ₹:
+    <input type="number" id="itemRate" step="0.01">
+  </label>
+
+  <label>GST Rate:
+    <select id="itemGstRate">
+      <option value="0">0%</option>
+      <option value="0.25">0.25%</option>
+      <option value="3">3%</option>
+      <option value="5">5%</option>
+      <option value="12">12%</option>
+      <option value="18" selected>18%</option>
+      <option value="28">28%</option>
+    </select>
+  </label>
+
+  <label>ITC Category:
+    <select id="itemItcCategory">
+      <option value="OTHER" selected>Other (normal purchase)</option>
+      <option value="IMPORT_GOODS">Import of Goods</option>
+      <option value="IMPORT_SERVICES">Import of Services</option>
+      <option value="RCM">Reverse Charge (RCM)</option>
+      <option value="ISD">ISD Credit</option>
+    </select>
+  </label>
+
+  <label>ITC Eligible:
+    <select id="itemItcEligible">
+      <option value="ELIGIBLE" selected>Eligible</option>
+      <option value="INELIGIBLE_17_5">Ineligible — Sec 17(5)</option>
+      <option value="INELIGIBLE_OTHER">Ineligible — Other</option>
+    </select>
+  </label>
+
+  <label>
+    <input type="checkbox" id="itemRcmApplicable">
+    Reverse Charge (RCM) — GST self-assessed by us on this purchase
+  </label>
+  <span id="itcHint" style="font-size:11px; color:#555; margin-left:6px;"></span>
+
+  <button onclick="addItem()">Add Item</button>
+</div>
+
+<!-- 3️⃣ ITEMS LIST -->
+<div class="section-box">
+  <div class="section-title">Items</div>
+
+  <table id="itemsTable">
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>ITC Category</th>
+      <th>ITC Eligible</th>
+      <th>RCM</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+    </tr>
+  </table>
+
+  <div class="totals-box" id="totalsBox"></div>
+</div>
+
+<!-- 4️⃣ SAVE -->
+<div class="section-box">
+  <button onclick="savePurchase()">Save Purchase</button>
+</div>
+
+<script>
+let items = [];
+let selectedItem = null;
+let linkedPoId = null;
+
+const itemSearch = document.getElementById("itemSearch");
+const suggestionsBox = document.getElementById("suggestions");
+const itemGstRate = document.getElementById("itemGstRate");
+const itemItcCategory = document.getElementById("itemItcCategory");
+const itemItcEligible = document.getElementById("itemItcEligible");
+const itemRcmApplicable = document.getElementById("itemRcmApplicable");
+const itcHint = document.getElementById("itcHint");
+const taxTypeSelect = document.getElementById("taxType");
+const supplierInput = document.getElementById("supplier");
+const invoiceNoInput = document.getElementById("invoiceNo");
+const supplierSuggestions = document.getElementById("supplierSuggestions");
+const supplierInfoLine = document.getElementById("supplierInfoLine");
+
+let selectedSupplierId = null; // null = free-typed supplier name, no supplier record linked yet
+
+const ITC_CATEGORY_LABELS = {
+  OTHER: "Other",
+  IMPORT_GOODS: "Import of Goods",
+  IMPORT_SERVICES: "Import of Services",
+  RCM: "Reverse Charge (RCM)",
+  ISD: "ISD Credit"
+};
+
+const ITC_ELIGIBLE_LABELS = {
+  ELIGIBLE: "Eligible",
+  INELIGIBLE_17_5: "Ineligible — Sec 17(5)",
+  INELIGIBLE_OTHER: "Ineligible — Other"
+};
+
+// ITC Category and the RCM checkbox are independent fields on the backend
+// (see purchase_invoice_items.rcm_applicable comment in server.js) — a line
+// can be flagged RCM before it's categorised, and vice versa, and the two
+// are never forced to agree. This hint just nudges the common case: most
+// RCM purchases are also categorised "Reverse Charge (RCM)" in ITC Category
+// so Table 3.1(d) and Table 4(A) row 3 end up describing the same lines.
+function applyItcHint() {
+  if (itemRcmApplicable.checked && itemItcCategory.value !== "RCM") {
+    itcHint.textContent = "Tip: ITC Category is usually also set to \"Reverse Charge (RCM)\" for RCM lines.";
+  } else {
+    itcHint.textContent = "";
+  }
+}
+itemRcmApplicable.addEventListener("change", applyItcHint);
+itemItcCategory.addEventListener("change", applyItcHint);
+
+/* 🔍 SUPPLIER AUTOCOMPLETE (matches the client autocomplete on Sales Order) */
+supplierInput.addEventListener("input", async () => {
+  selectedSupplierId = null;
+  supplierInfoLine.textContent = "";
+  supplierSuggestions.innerHTML = "";
+  supplierSuggestions.style.display = "none";
+
+  const q = supplierInput.value.trim();
+  if (q.length < 1) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/suppliers/search?q=${encodeURIComponent(q)}`);
+    const list = await res.json();
+    if (!list.length) return;
+
+    list.forEach(supplier => {
+      const div = document.createElement("div");
+      div.textContent = supplier.gstin ? `${supplier.name} — ${supplier.gstin}` : supplier.name;
+      div.onclick = () => {
+        supplierInput.value = supplier.name;
+        selectedSupplierId = supplier.id;
+        supplierInfoLine.textContent = supplier.gstin
+          ? `GSTIN: ${supplier.gstin} — CGST/SGST vs IGST will be worked out automatically`
+          : "No GSTIN on file — Purchase Type below will be used";
+        supplierSuggestions.innerHTML = "";
+        supplierSuggestions.style.display = "none";
+      };
+      supplierSuggestions.appendChild(div);
+    });
+
+    supplierSuggestions.style.display = "block";
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// Typing a name that no longer matches a picked supplier should drop the
+// linked id so we don't silently save against the wrong supplier record.
+document.addEventListener("click", (e) => {
+  if (!supplierSuggestions.contains(e.target) && e.target !== supplierInput) {
+    supplierSuggestions.style.display = "none";
+  }
+});
+
+/* If arriving from the Purchase Order Register with ?po_id=, pull in the
+   pending (received-but-not-yet-invoiced) items from that PO instead of
+   starting blank. Otherwise behave exactly like a normal direct purchase. */
+window.addEventListener("DOMContentLoaded", async () => {
+  const params = new URLSearchParams(window.location.search);
+  const poId = params.get("po_id");
+
+  // Prefill the next purchase invoice number either way — convenience only,
+  // still editable.
+  try {
+    const invRes = await fetch(API_BASE_URL + "/purchase/next-invoice");
+    const invData = await invRes.json();
+    if (invData.invoiceNo) invoiceNoInput.value = invData.invoiceNo;
+  } catch (e) {
+    // Non-fatal — user can type the invoice number manually.
+  }
+
+  if (!poId) return;
+
+  const res = await fetch(API_BASE_URL + `/po/${poId}`);
+  const po = await res.json();
+  if (po.error) {
+    alert(po.error);
+    return;
+  }
+
+  linkedPoId = po.id;
+
+  document.getElementById("poBanner").style.display = "block";
+  document.getElementById("poBannerNo").textContent = po.po_no;
+  document.getElementById("addItemBox").style.display = "none";
+
+  supplierInput.value = po.supplier;
+  supplierInput.readOnly = true;
+  selectedSupplierId = po.supplier_id || null;
+  taxTypeSelect.value = po.tax_type || "INTRA";
+  taxTypeSelect.disabled = true;
+
+  // Only items that have actually been RECEIVED (via Goods Receipt) and not
+  // yet invoiced should be pulled in here. Using the ordered qty instead of
+  // received_qty would let the vendor be invoiced — and booked as a
+  // creditor — for goods that haven't physically arrived yet.
+  const pending = po.items.filter(i => i.received_qty - i.invoiced_qty > 1e-6);
+  if (!pending.length) {
+    alert("Nothing on this purchase order is ready to invoice yet — either no goods have been received against it, or everything received has already been invoiced.");
+  }
+
+  pending.forEach(i => {
+    const qty = i.received_qty - i.invoiced_qty;
+    const amount = qty * i.rate;
+    const gstAmount = amount * (i.gst_rate / 100);
+    items.push({
+      item_id: i.item_id,
+      po_item_id: i.id,
+      item_name: i.item_name,
+      qty,
+      rate: i.rate,
+      amount,
+      gst_rate: i.gst_rate,
+      gst_amount: gstAmount,
+      // Purchase Orders don't carry ITC classification today (Step 2/3 only
+      // added itc_category / itc_eligible / rcm_applicable to
+      // purchase_invoice_items), so anything pulled in from a PO is billed
+      // as an ordinary, fully-eligible, non-RCM purchase — same as its
+      // historical behaviour, and the same defaults the columns fall back
+      // to on the backend.
+      itc_category: "OTHER",
+      itc_eligible: "ELIGIBLE",
+      rcm_applicable: 0
+    });
+  });
+
+  renderPoItems();
+});
+
+/* Renders items pulled in from a PO (read-only rows, no manual add/remove
+   since the quantities must reconcile back to what was received). */
+function renderPoItems() {
+  itemsTable.innerHTML = `
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>ITC Category</th>
+      <th>ITC Eligible</th>
+      <th>RCM</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+    </tr>
+  `;
+
+  items.forEach(item => {
+    const row = itemsTable.insertRow();
+    row.innerHTML = `
+      <td>${item.item_name}</td>
+      <td class="center">${item.qty}</td>
+      <td class="amount">${item.rate.toFixed(2)}</td>
+      <td class="amount">${item.amount.toFixed(2)}</td>
+      <td class="center">${ITC_CATEGORY_LABELS[item.itc_category] || "Other"}</td>
+      <td class="center">${ITC_ELIGIBLE_LABELS[item.itc_eligible] || "Eligible"}</td>
+      <td class="center">${item.rcm_applicable ? "Yes" : "No"}</td>
+      <td class="center">${item.gst_rate}%</td>
+      <td class="amount">${item.gst_amount.toFixed(2)}</td>
+      <td class="amount">${(item.amount + item.gst_amount).toFixed(2)}</td>
+    `;
+  });
+
+  renderTotals();
+}
+
+/* 🔍 ITEM AUTOCOMPLETE */
+itemSearch.addEventListener("input", async () => {
+  selectedItem = null;
+  const q = itemSearch.value.trim();
+
+  if (q.length < 2) {
+    suggestionsBox.innerHTML = "";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/items/search?q=${q}`);
+  const list = await res.json();
+
+  suggestionsBox.innerHTML = "";
+  list.forEach(item => {
+    const div = document.createElement("div");
+    div.textContent = `${item.item_name} (₹${item.selling_price})`;
+    div.style.padding = "4px";
+    div.style.cursor = "pointer";
+
+    div.onclick = () => {
+      selectedItem = item;
+      itemSearch.value = item.item_name;
+      itemRate.value = item.selling_price || "";
+      // Pre-fill the GST rate from the item's master record, if it has one
+      if (item.gst_rate !== null && item.gst_rate !== undefined) {
+        const match = [...itemGstRate.options].find(
+          o => Number(o.value) === Number(item.gst_rate)
+        );
+        if (match) itemGstRate.value = match.value;
+      }
+      suggestionsBox.innerHTML = "";
+    };
+
+    suggestionsBox.appendChild(div);
+  });
+});
+
+/* ➕ ADD ITEM */
+function addItem() {
+  const name = itemSearch.value.trim();
+  const qty = Number(itemQty.value);
+  const rate = Number(itemRate.value);
+  const gstRate = Number(itemGstRate.value);
+
+  if (!name) {
+    alert("Item name required");
+    return;
+  }
+  if (qty <= 0 || rate <= 0) {
+    alert("Invalid qty or rate");
+    return;
+  }
+
+  const amount = qty * rate;
+  const gstAmount = amount * (gstRate / 100);
+  const itcCategory = itemItcCategory.value;
+  const itcEligible = itemItcEligible.value;
+  const rcmApplicable = itemRcmApplicable.checked ? 1 : 0;
+
+  items.push({
+    item_id: selectedItem ? selectedItem.id : null,
+    item_name: name,
+    qty,
+    rate,
+    amount,
+    gst_rate: gstRate,
+    gst_amount: gstAmount,
+    itc_category: itcCategory,
+    itc_eligible: itcEligible,
+    rcm_applicable: rcmApplicable
+  });
+
+  const row = itemsTable.insertRow();
+  row.innerHTML = `
+    <td>${name}</td>
+    <td class="center">${qty}</td>
+    <td class="amount">${rate.toFixed(2)}</td>
+    <td class="amount">${amount.toFixed(2)}</td>
+    <td class="center">${ITC_CATEGORY_LABELS[itcCategory] || "Other"}</td>
+    <td class="center">${ITC_ELIGIBLE_LABELS[itcEligible] || "Eligible"}</td>
+    <td class="center">${rcmApplicable ? "Yes" : "No"}</td>
+    <td class="center">${gstRate}%</td>
+    <td class="amount">${gstAmount.toFixed(2)}</td>
+    <td class="amount">${(amount + gstAmount).toFixed(2)}</td>
+  `;
+
+  selectedItem = null;
+  itemSearch.value = "";
+  itemQty.value = 1;
+  itemRate.value = "";
+  itemGstRate.value = "18";
+  itemItcCategory.value = "OTHER";
+  itemItcEligible.value = "ELIGIBLE";
+  itemRcmApplicable.checked = false;
+  itcHint.textContent = "";
+
+  renderTotals();
+}
+
+/* 🧮 RUNNING TOTALS (taxable / CGST / SGST / IGST / grand total) */
+function renderTotals() {
+  const totalsBox = document.getElementById("totalsBox");
+
+  if (items.length === 0) {
+    totalsBox.innerHTML = "";
+    return;
+  }
+
+  const taxable = items.reduce((s, i) => s + i.amount, 0);
+  const totalGst = items.reduce((s, i) => s + i.gst_amount, 0);
+  const isInter = taxTypeSelect.value === "INTER";
+
+  const igst = isInter ? totalGst : 0;
+  const cgst = isInter ? 0 : totalGst / 2;
+  const sgst = isInter ? 0 : totalGst / 2;
+  const grandTotal = taxable + totalGst;
+
+  totalsBox.innerHTML = `
+    <div>Taxable Amount: ₹${taxable.toFixed(2)}</div>
+    ${isInter
+      ? `<div>IGST: ₹${igst.toFixed(2)}</div>`
+      : `<div>CGST: ₹${cgst.toFixed(2)}</div><div>SGST: ₹${sgst.toFixed(2)}</div>`
+    }
+    <div class="grand">Grand Total: ₹${grandTotal.toFixed(2)}</div>
+  `;
+}
+
+taxTypeSelect.addEventListener("change", renderTotals);
+
+/* 💾 SAVE PURCHASE */
+function savePurchase() {
+  const date = purchaseDate.value;
+  const supplierEl = document.getElementById("supplier");
+  const supplier = supplierEl.value.trim();
+  const invoiceNoEl = document.getElementById("invoiceNo");
+  const invoiceNo = invoiceNoEl.value.trim();
+  const taxType = taxTypeSelect.value;
+
+  if (!date || !supplier || !invoiceNo) {
+    alert("Date, supplier and invoice no required");
+    return;
+  }
+
+  if (items.length === 0) {
+    alert("Add at least one item");
+    return;
+  }
+
+  fetch(API_BASE_URL + "/purchase/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date,
+      supplier,
+      supplierId: selectedSupplierId,
+      invoiceNo,
+      taxType,
+      po_id: linkedPoId,
+      items
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    alert("Purchase saved successfully");
+
+    if (linkedPoId) {
+      // This invoice was tied to a PO — head back to the register so the
+      // user can see its updated status rather than resetting this form.
+      window.location.href = "Purchase Order Register.html";
+      return;
+    }
+
+    // reset (only relevant for direct, non-PO purchases)
+    items = [];
+    itemsTable.innerHTML = `
+      <tr>
+        <th>Item</th>
+        <th>Qty</th>
+        <th>Rate</th>
+        <th>Amount</th>
+        <th>ITC Category</th>
+        <th>ITC Eligible</th>
+        <th>RCM</th>
+        <th>GST %</th>
+        <th>GST Amt</th>
+        <th>Total</th>
+      </tr>
+    `;
+    purchaseDate.value = "";
+    supplierEl.value = "";
+    selectedSupplierId = null;
+    supplierInfoLine.textContent = "";
+    invoiceNoEl.value = "";
+    taxTypeSelect.value = "INTRA";
+    renderTotals();
+  })
+  .catch(() => alert("Error saving purchase"));
+}
+</script>
+
+</body>
+</html>

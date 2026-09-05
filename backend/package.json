@@ -1,0 +1,29 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "backup-db": "node scripts/backup-accounts-db.js",
+    "seed-test-users": "node scripts/seed-test-users.js",
+    "rbac-coverage": "node rbac/test-role-coverage.js",
+    "rbac-rollout": "node scripts/rollout-cli.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "pdfkit": "^0.19.1",
+    "sqlite3": "^5.1.7"
+  }
+}
