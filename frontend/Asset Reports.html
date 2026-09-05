@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<title>Fixed Asset Reports</title>
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 1000px; max-width: 97%; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; margin-top: 0; }
+.top-links { text-align:right; font-size:12px; margin-bottom:8px; }
+.top-links a { margin-left: 12px; }
+.picker { text-align:center; margin-bottom: 14px; }
+.picker select, .picker input, .picker button { padding: 6px 10px; font-size: 13px; margin: 4px 4px; }
+.picker label { font-size: 12.5px; color:#444; }
+table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12.5px; }
+th, td { border: 1px solid black; padding: 5px 6px; }
+th { background: #f2f2f2; }
+.totals-row td { font-weight: bold; background: #fafafa; }
+#statusMsg { margin-top: 10px; font-size: 13px; color:#a00; }
+.badge { display: inline-block; padding: 1px 7px; font-size: 11px; border: 1px solid #000; }
+.badge.ACTIVE { background: #eaffea; }
+.badge.DISPOSED, .badge.WRITTEN_OFF { background: #f2f2f2; color: #999; border-color: #999; }
+.pos { color: #060; }
+.neg { color: #a00; }
+.never { color:#a00; font-style: italic; }
+.verify-btn { font-size: 11px; padding: 2px 6px; cursor:pointer; }
+.report-note { font-size: 11.5px; color:#666; margin-top:4px; text-align:center; }
+.status-pill { display:inline-block; padding: 1px 8px; font-size: 11px; border: 1px solid #000; font-weight:bold; }
+.status-pill.MATCH { background:#eaffea; color:#060; border-color:#060; }
+.status-pill.MISMATCH { background:#ffecec; color:#a00; border-color:#a00; }
+.summary-box { border: 1px solid #999; background:#f7f7f7; padding: 10px 14px; margin-top: 14px; font-size: 13px; }
+.summary-box .headline { font-size: 14px; font-weight: bold; margin-bottom: 6px; }
+.summary-box.RECONCILED .headline { color:#060; }
+.summary-box.REVIEW-NEEDED .headline { color:#a00; }
+.summary-grid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 20px; }
+.summary-grid div span { font-weight:bold; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="top-links">
+    <a href="Main Menu.html">&larr; Main Menu</a>
+    <a href="Assets.html">Asset Master &rarr;</a>
+    <a href="Depreciation Run.html">Depreciation Run &rarr;</a>
+  </div>
+  <h2>Fixed Asset Reports</h2>
+
+  <div class="picker">
+    Report:
+    <select id="reportType">
+      <option value="asset-register">Fixed Asset Register</option>
+      <option value="depreciation-schedule">Depreciation Schedule (Audit)</option>
+      <option value="disposals">Asset-wise Profit/Loss on Disposal</option>
+      <option value="physical-verification">Physical Verification Checklist</option>
+      <option value="reconciliation">Reconciliation vs Balance Sheet</option>
+    </select>
+
+    <span id="statusFilterWrap">
+      <label>Status:</label>
+      <select id="statusFilter">
+        <option value="">All</option>
+        <option value="ACTIVE">Active</option>
+        <option value="DISPOSED">Disposed</option>
+        <option value="WRITTEN_OFF">Written Off</option>
+      </select>
+    </span>
+
+    <span id="dateFilterWrap">
+      <label>From:</label> <input type="date" id="fromDate">
+      <label>To:</label> <input type="date" id="toDate">
+    </span>
+
+    <span id="locationFilterWrap">
+      <label>Location:</label>
+      <select id="locationFilter"><option value="">All</option></select>
+    </span>
+
+    <button onclick="loadReport()">Run</button>
+  </div>
+
+  <div id="statusMsg"></div>
+  <div id="reportArea"></div>
+</div>
+
+<script>
+const API = window.API_BASE_URL;
+const reportType = document.getElementById("reportType");
+const statusFilterWrap = document.getElementById("statusFilterWrap");
+const dateFilterWrap = document.getElementById("dateFilterWrap");
+const locationFilterWrap = document.getElementById("locationFilterWrap");
+
+function money(n) {
+  const v = Number(n || 0);
+  return (v < 0 ? "-₹" : "₹") + Math.abs(v).toFixed(2);
+}
+
+function updateFilterVisibility() {
+  const t = reportType.value;
+  statusFilterWrap.style.display = (t === "asset-register") ? "inline" : "none";
+  dateFilterWrap.style.display = (t === "depreciation-schedule" || t === "disposals") ? "inline" : "none";
+  locationFilterWrap.style.display = (t === "asset-register" || t === "physical-verification") ? "inline" : "none";
+}
+reportType.addEventListener("change", updateFilterVisibility);
+updateFilterVisibility();
+
+async function loadLocations() {
+  try {
+    const res = await fetch(`${API}/locations`);
+    const rows = await res.json();
+    const sel = document.getElementById("locationFilter");
+    (rows || []).forEach(l => {
+      const o = document.createElement("option");
+      o.value = l.id; o.textContent = l.location_name;
+      sel.appendChild(o);
+    });
+  } catch (e) { /* location filter is optional; ignore if it can't load */ }
+}
+loadLocations();
+
+async function loadReport() {
+  const t = reportType.value;
+  const msg = document.getElementById("statusMsg");
+  const area = document.getElementById("reportArea");
+  msg.textContent = ""; area.innerHTML = "";
+
+  const status = document.getElementById("statusFilter").value;
+  const from = document.getElementById("fromDate").value;
+  const to = document.getElementById("toDate").value;
+  const locationId = document.getElementById("locationFilter").value;
+
+  let url;
+  if (t === "asset-register") {
+    const p = new URLSearchParams();
+    if (status) p.set("status", status);
+    if (locationId) p.set("location_id", locationId);
+    url = `${API}/fam/report/asset-register?${p}`;
+  } else if (t === "depreciation-schedule") {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    url = `${API}/fam/report/depreciation-schedule?${p}`;
+  } else if (t === "disposals") {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    url = `${API}/fam/report/disposals?${p}`;
+  } else if (t === "physical-verification") {
+    const p = new URLSearchParams();
+    if (locationId) p.set("location_id", locationId);
+    url = `${API}/fam/report/physical-verification?${p}`;
+  } else if (t === "reconciliation") {
+    url = `${API}/fam/report/reconciliation`;
+  }
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) { msg.textContent = data.error || "Could not load report."; return; }
+
+    if (t === "asset-register") renderAssetRegister(data);
+    else if (t === "depreciation-schedule") renderDepreciationSchedule(data);
+    else if (t === "disposals") renderDisposals(data);
+    else if (t === "physical-verification") renderPhysicalVerification(data);
+    else if (t === "reconciliation") renderReconciliation(data);
+  } catch (e) {
+    msg.textContent = "Could not reach the server.";
+  }
+}
+
+function renderAssetRegister(data) {
+  const area = document.getElementById("reportArea");
+  area.innerHTML = renderTable(
+    ["Code", "Name", "Category", "Location", "Status", "Acq. Date", "Cost", "Accum. Depreciation", "WDV"],
+    data.rows.map(r => [
+      r.asset_code || "-", r.asset_name, r.category_name, r.location_name || "-",
+      statusBadge(r.status), r.acquisition_date,
+      money(r.acquisition_cost), money(r.accumulated_depreciation), money(r.wdv)
+    ]),
+    ["Total", "", "", "", "", "", money(data.total.acquisition_cost), money(data.total.accumulated_depreciation), money(data.total.wdv)]
+  );
+  area.innerHTML += `<div class="report-note">Accumulated depreciation reflects only PROCESSED depreciation runs and posted disposal stubs.</div>`;
+}
+
+function renderDepreciationSchedule(data) {
+  const area = document.getElementById("reportArea");
+  area.innerHTML = renderTable(
+    ["Asset Code", "Asset Name", "Category", "Period", "Opening WDV", "Depreciation", "Closing WDV"],
+    data.rows.map(r => [
+      r.asset_code || "-", r.asset_name, r.category_name,
+      `${r.period_start} to ${r.period_end}`,
+      money(r.opening_wdv), money(r.depreciation_amount), money(r.closing_wdv)
+    ]),
+    ["Total", "", "", "", "", money(data.total), ""]
+  );
+}
+
+function renderDisposals(data) {
+  const area = document.getElementById("reportArea");
+  area.innerHTML = renderTable(
+    ["Date", "Asset Code", "Asset Name", "Category", "Mode", "Sale Value", "Book Value", "Profit / (Loss)", "Voucher"],
+    data.rows.map(r => [
+      r.date, r.asset_code || "-", r.asset_name, r.category_name, r.mode,
+      money(r.sale_value), money(r.book_value_at_disposal),
+      `<span class="${r.profit_loss >= 0 ? 'pos' : 'neg'}">${money(r.profit_loss)}</span>`,
+      r.journal_voucher_no || "-"
+    ]),
+    ["Total", "", "", "", "", "", "", `<span class="${data.total >= 0 ? 'pos' : 'neg'}">${money(data.total)}</span>`, ""]
+  );
+}
+
+function renderPhysicalVerification(rows) {
+  const area = document.getElementById("reportArea");
+  let html = "<table><thead><tr><th>Asset Code</th><th>Asset Name</th><th>Category</th><th>Tag Code</th><th>Location</th><th>Last Verified</th><th></th></tr></thead><tbody>";
+  if (!rows.length) {
+    html += `<tr><td colspan="7" style="text-align:center;">No active assets found.</td></tr>`;
+  } else {
+    rows.forEach(r => {
+      html += `<tr id="pv-row-${r.id}">
+        <td>${r.asset_code || "-"}</td>
+        <td>${r.asset_name}</td>
+        <td>${r.category_name}</td>
+        <td>${r.tag_code || "-"}</td>
+        <td>${r.location_name || "-"}</td>
+        <td>${r.last_verified_date ? r.last_verified_date : '<span class="never">Never verified</span>'}</td>
+        <td><button class="verify-btn" onclick="markVerified(${r.id})">Mark Verified Today</button></td>
+      </tr>`;
+    });
+  }
+  html += "</tbody></table>";
+  area.innerHTML = html;
+  area.innerHTML += `<div class="report-note">Checklist covers ACTIVE assets only. Use it during a physical walk-through to confirm each tag is where the register says it should be.</div>`;
+}
+
+async function markVerified(assetId) {
+  const msg = document.getElementById("statusMsg");
+  msg.textContent = "";
+  try {
+    const res = await fetch(`${API}/asset/${assetId}/verify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const data = await res.json();
+    if (!res.ok) { msg.textContent = data.error || "Could not mark verified."; return; }
+    const row = document.getElementById(`pv-row-${assetId}`);
+    if (row) row.children[5].textContent = data.last_verified_date;
+  } catch (e) {
+    msg.textContent = "Could not reach the server.";
+  }
+}
+
+function renderReconciliation(data) {
+  const area = document.getElementById("reportArea");
+  const money2 = n => money(n); // signed values are meaningful here (e.g. negative accum. depreciation)
+  let html = renderTable(
+    ["Category", "Ledger", "Active Assets", "Register Value", "Ledger Balance", "Variance", "Status"],
+    data.rows.map(r => [
+      r.category_name, r.ledger, r.asset_count == null ? "-" : r.asset_count,
+      money2(r.register_value), money2(r.ledger_value), money2(r.variance),
+      `<span class="status-pill ${r.status}">${r.status}</span>`
+    ])
+  );
+
+  const s = data.summary;
+  const pillClass = s.overall_status.replace(/\s+/g, "-");
+  html += `
+    <div class="summary-box ${pillClass}">
+      <div class="headline">Overall: ${s.overall_status}</div>
+      <div class="summary-grid">
+        <div>Gross Cost — Register: <span>${money2(s.total_gross_cost_register)}</span></div>
+        <div>Gross Cost — Ledger: <span>${money2(s.total_gross_cost_ledger)}</span></div>
+        <div>Gross Cost — Variance: <span>${money2(s.total_gross_cost_register - s.total_gross_cost_ledger)}</span></div>
+        <div>Accum. Depreciation — Register: <span>${money2(s.accumulated_depreciation_register)}</span></div>
+        <div>Accum. Depreciation — Ledger: <span>${money2(s.accumulated_depreciation_ledger)}</span></div>
+        <div>Accum. Depreciation — Variance: <span>${money2(s.accumulated_depreciation_register - s.accumulated_depreciation_ledger)}</span></div>
+        <div>Net Block — Register: <span>${money2(s.net_block_register)}</span></div>
+        <div>Net Block — Ledger: <span>${money2(s.net_block_ledger)}</span></div>
+        <div>Net Block — Variance: <span>${money2(s.net_block_variance)}</span></div>
+      </div>
+    </div>
+    <div class="report-note">
+      Register value comes from the Fixed Asset module's own tables; Ledger value comes from what's actually posted
+      in the general ledger. A variance on an OPENING-mode asset is expected (no journal is posted for those) —
+      journal that opening balance in separately if you want it to reconcile. Any other variance usually means a
+      journal failed to post or a ledger name doesn't match exactly.
+    </div>`;
+  area.innerHTML = html;
+}
+
+function statusBadge(status) {
+  return `<span class="badge ${status}">${status}</span>`;
+}
+
+function renderTable(headers, rows, totalsRow) {
+  let html = "<table><thead><tr>" + headers.map(h => `<th>${h}</th>`).join("") + "</tr></thead><tbody>";
+  if (!rows.length) html += `<tr><td colspan="${headers.length}" style="text-align:center;">No data found.</td></tr>`;
+  rows.forEach(r => { html += "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>"; });
+  if (totalsRow && rows.length) html += `<tr class="totals-row">` + totalsRow.map(c => `<td>${c}</td>`).join("") + `</tr>`;
+  html += "</tbody></table>";
+  return html;
+}
+</script>
+</body>
+</html>
