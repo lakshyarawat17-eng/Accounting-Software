@@ -1,0 +1,220 @@
+/* ============================================================
+   Books of Accounts — shared design system
+   Loaded on every page after page-specific styles, so these
+   rules intentionally win on shared elements (body, container,
+   card, table, button, input, badge, status) to keep a single,
+   consistent, professional look across the whole app.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Ink & surfaces */
+  --ink: #16243f;
+  --ink-soft: #47536a;
+  --muted: #6b7686;
+  --bg: #eef1f6;
+  --card: #ffffff;
+  --line: #dde3ec;
+  --line-strong: #c7d0de;
+
+  /* Legacy aliases kept so existing page styles that reference
+     --text / --bg / --line continue to resolve sensibly */
+  --text: var(--ink);
+
+  /* Brand */
+  --accent: #1c4f9c;
+  --accent-strong: #123b78;
+  --accent-soft: #e8f0fb;
+  --accent-2: #0e7c74;
+  --accent-2-soft: #e5f5f2;
+
+  /* Status */
+  --success: #157a3d;
+  --success-bg: #e9f7ee;
+  --danger: #b3261e;
+  --danger-bg: #fceeed;
+  --warning: #92600b;
+  --warning-bg: #fdf3de;
+
+  /* Shape & elevation */
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 2px rgba(17, 28, 51, 0.06), 0 10px 24px rgba(17, 28, 51, 0.07);
+  --shadow-sm: 0 1px 2px rgba(17, 28, 51, 0.08);
+
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  margin: 0;
+}
+
+::selection { background: var(--accent-soft); color: var(--accent-strong); }
+
+a { color: var(--accent); }
+a:hover { text-decoration: none; }
+
+h1, h2, h3 { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; }
+h1 { font-family: var(--font-serif); font-weight: 600; letter-spacing: -0.005em; }
+
+p { line-height: 1.55; }
+
+hr { border: none; border-top: 1px solid var(--line); }
+
+/* ---------- Buttons & form controls ---------- */
+
+button, .btn, input, select, textarea {
+  font: inherit;
+  color: var(--ink);
+}
+
+button, .btn, input, select, textarea, table, th, td {
+  border-color: var(--line);
+}
+
+button, .btn {
+  border-radius: var(--radius-sm);
+  padding: 9px 15px;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+  transition: background .12s ease, border-color .12s ease, transform .06s ease;
+}
+
+button:hover, .btn:hover { border-color: var(--accent); color: var(--accent-strong); }
+button:active, .btn:active { transform: translateY(1px); }
+
+button.primary, .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.primary:hover, .btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+
+button.secondary, .btn.secondary {
+  background: #fff;
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+button.secondary:hover, .btn.secondary:hover { border-color: var(--ink-soft); color: var(--ink); }
+
+button.teal, .btn.teal { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+button.teal:hover, .btn.teal:hover { filter: brightness(0.93); }
+
+button.danger, .btn.danger { background: #fff; border-color: var(--danger); color: var(--danger); }
+button.danger:hover, .btn.danger:hover { background: var(--danger-bg); }
+
+button:disabled, .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+input, select, textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  background: #fff;
+  color: var(--ink);
+}
+
+input:focus, select:focus, textarea:focus, button:focus-visible, .btn:focus-visible {
+  outline: 2px solid rgba(28, 79, 156, 0.28);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+/* ---------- Tables ---------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+th, td {
+  border-bottom: 1px solid var(--line);
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  padding: 9px 10px;
+  vertical-align: top;
+  text-align: left;
+}
+
+th {
+  background: #f4f7fb;
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 12.5px;
+  position: sticky;
+  top: 0;
+}
+
+tbody tr:nth-child(even) td { background: #fafbfd; }
+tbody tr:hover td { background: var(--accent-soft); }
+
+/* ---------- Layout surfaces ---------- */
+
+.card, .section-box, .hero, .container, .wrap, .menu-group {
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+}
+
+/* ---------- Status / badges ---------- */
+
+.status {
+  margin-top: 12px;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  background: #f6f8fb;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.status.ok { border-color: #b7e2c4; background: var(--success-bg); color: var(--success); }
+.status.err { border-color: #eec2be; background: var(--danger-bg); color: var(--danger); }
+
+.badge, .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.muted, .sub, .small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media print {
+  html, body { background: #fff !important; }
+  .hero, .card, .section-box, .container, .wrap, .menu-group { box-shadow: none !important; }
+}

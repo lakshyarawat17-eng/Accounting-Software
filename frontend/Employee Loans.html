@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<title>Employee Loans &amp; Advances</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 820px; max-width: 96%; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; margin-top: 0; }
+.top-links { text-align:right; font-size:12px; margin-bottom:8px; }
+label { display:block; margin-top: 10px; font-size: 13px; }
+input, select { width: 100%; padding: 5px; font-family: inherit; font-size: 13px; box-sizing: border-box; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+#searchResults { border: 1px solid #ccc; max-height: 150px; overflow-y: auto; display:none; }
+#searchResults div { padding: 5px 8px; cursor: pointer; font-size: 13px; }
+#searchResults div:hover { background: #eef; }
+.selected-emp { margin-top: 8px; padding: 8px; background: #f4f4f4; border: 1px solid #ccc; font-size: 13px; }
+button { padding: 6px 14px; cursor: pointer; margin-top: 14px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid black; padding: 5px 6px; font-size: 12.5px; }
+th { background: #f2f2f2; }
+#statusMsg { margin-top: 10px; font-size: 13px; }
+.checkbox-row { display:flex; align-items:center; gap:6px; margin-top: 10px; }
+.checkbox-row input { width:auto; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+<body>
+<div class="container">
+  <div class="top-links"><a href="Main Menu.html">&larr; Main Menu</a></div>
+  <h2>Employee Loans &amp; Advances</h2>
+
+  <label>Search Employee
+    <input type="text" id="employeeSearch" placeholder="Type name or code…" autocomplete="off">
+  </label>
+  <div id="searchResults"></div>
+  <div class="selected-emp" id="selectedEmp" style="display:none;"></div>
+
+  <div class="form-grid">
+    <label>Type
+      <select id="loanType"><option value="LOAN">Loan</option><option value="ADVANCE">Advance</option></select>
+    </label>
+    <label>Principal Amount <input type="number" id="principal"></label>
+    <label>Monthly EMI <input type="number" id="emi"></label>
+    <label>Start Month/Year
+      <div style="display:flex; gap:6px;">
+        <input type="number" id="startMonth" placeholder="MM" min="1" max="12" style="width:60px;">
+        <input type="number" id="startYear" placeholder="YYYY" style="width:90px;">
+      </div>
+    </label>
+  </div>
+
+  <div class="checkbox-row">
+    <input type="checkbox" id="postLedger">
+    <label style="margin:0;" for="postLedger">Post disbursement to ledger now (debit Employee Loans &amp; Advances, credit Bank A/c)</label>
+  </div>
+
+  <button onclick="createLoan()">Record Loan</button>
+  <div id="statusMsg"></div>
+
+  <h2 style="margin-top:30px;">Active Loans</h2>
+  <table>
+    <thead><tr><th>Employee</th><th>Type</th><th>Principal</th><th>EMI</th><th>Outstanding</th><th>Status</th><th></th></tr></thead>
+    <tbody id="loanBody"></tbody>
+  </table>
+</div>
+
+<script>
+const API = window.API_BASE_URL;
+let selectedEmployeeId = null;
+
+const searchBox = document.getElementById("employeeSearch");
+const resultsBox = document.getElementById("searchResults");
+searchBox.addEventListener("input", async () => {
+  const q = searchBox.value.trim();
+  if (!q) { resultsBox.style.display = "none"; return; }
+  const res = await fetch(`${API}/hr/employees/search?q=${encodeURIComponent(q)}`);
+  const rows = await res.json();
+  resultsBox.innerHTML = "";
+  rows.forEach(e => {
+    const div = document.createElement("div");
+    div.textContent = `${e.employee_code} — ${e.full_name}`;
+    div.onclick = () => {
+      selectedEmployeeId = e.id;
+      resultsBox.style.display = "none";
+      searchBox.value = "";
+      document.getElementById("selectedEmp").style.display = "block";
+      document.getElementById("selectedEmp").textContent = `${e.employee_code} — ${e.full_name}`;
+    };
+    resultsBox.appendChild(div);
+  });
+  resultsBox.style.display = rows.length ? "block" : "none";
+});
+
+async function createLoan() {
+  const msg = document.getElementById("statusMsg");
+  if (!selectedEmployeeId) { msg.style.color = "#a00"; msg.textContent = "Select an employee first."; return; }
+  const payload = {
+    employeeId: selectedEmployeeId,
+    loanType: document.getElementById("loanType").value,
+    principal: Number(document.getElementById("principal").value),
+    emiAmount: Number(document.getElementById("emi").value),
+    startMonth: Number(document.getElementById("startMonth").value) || null,
+    startYear: Number(document.getElementById("startYear").value) || null,
+    postToLedger: document.getElementById("postLedger").checked
+  };
+  if (!payload.principal || !payload.emiAmount) { msg.style.color = "#a00"; msg.textContent = "Principal and EMI are required."; return; }
+  const res = await fetch(`${API}/hr/loan/create`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error || "Error"; return; }
+  msg.style.color = "#070";
+  msg.textContent = "Loan recorded." + (data.voucher_no ? ` Journal voucher ${data.voucher_no} posted.` : "");
+  loadLoans();
+}
+
+async function closeLoan(id) {
+  await fetch(`${API}/hr/loan/${id}/close`, { method: "POST" });
+  loadLoans();
+}
+
+async function loadLoans() {
+  const res = await fetch(`${API}/hr/loan/list?status=ACTIVE`);
+  const rows = await res.json();
+  const body = document.getElementById("loanBody");
+  body.innerHTML = "";
+  rows.forEach(l => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${l.full_name}</td><td>${l.loan_type}</td><td>₹${Number(l.principal).toFixed(2)}</td>
+      <td>₹${Number(l.emi_amount).toFixed(2)}</td><td>₹${Number(l.outstanding).toFixed(2)}</td><td>${l.status}</td>
+      <td><button onclick="closeLoan(${l.id})">Close</button></td>`;
+    body.appendChild(tr);
+  });
+}
+loadLoans();
+</script>
+</body>
+</html>

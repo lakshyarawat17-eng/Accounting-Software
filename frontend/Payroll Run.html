@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<title>Payroll Run</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+<style>
+body { font-family: "Times New Roman", serif; background:#fafafa; }
+.container { width: 1050px; max-width: 97%; margin: 40px auto; background:#fff; padding:20px; border:1px solid #000; }
+h2 { text-align: center; margin-top: 0; }
+.top-links { text-align:right; font-size:12px; margin-bottom:8px; }
+.two-col { display:flex; gap: 24px; }
+.left { width: 260px; flex-shrink:0; }
+.right { flex:1; min-width:0; }
+.picker { padding: 10px; border: 1px solid #999; background:#f7f7f7; }
+.picker select, .picker button { padding: 6px 8px; font-size: 13px; margin-top: 6px; width: 100%; box-sizing: border-box; }
+#runList { margin-top: 16px; }
+#runList div { padding: 5px 6px; font-size: 12.5px; border-bottom: 1px solid #eee; cursor: pointer; }
+#runList div:hover { background: #eef; }
+#runList .status { float:right; font-weight:bold; }
+.status-DRAFT { color:#b8860b; }
+.status-PROCESSED { color:#06c; }
+.status-PAID { color:#070; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+th, td { border: 1px solid black; padding: 4px 5px; }
+th { background: #f2f2f2; }
+td input { width: 70px; font-size: 12px; }
+.totals-row td { font-weight: bold; background: #fafafa; }
+.run-header { display:flex; justify-content: space-between; align-items:center; margin-bottom: 10px; }
+.run-header .title { font-size: 15px; font-weight: bold; }
+.actions button { margin-left: 6px; padding: 6px 12px; cursor: pointer; }
+#statusMsg { margin-top: 10px; font-size: 13px; }
+.note { font-size: 11px; color: #777; margin-top: 10px; }
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+<body>
+<div class="container">
+  <div class="top-links"><a href="Main Menu.html">&larr; Main Menu</a></div>
+  <h2>Payroll Run</h2>
+
+  <div class="two-col">
+    <div class="left">
+      <div class="picker">
+        Month:
+        <select id="month"></select>
+        Year:
+        <select id="year"></select>
+        <button onclick="createRun()">Create / Refresh Draft</button>
+      </div>
+      <div id="runList"></div>
+    </div>
+
+    <div class="right">
+      <div id="runDetail">Select or create a payroll run to begin.</div>
+    </div>
+  </div>
+  <div id="statusMsg"></div>
+</div>
+
+<script>
+const API = window.API_BASE_URL;
+const monthSel = document.getElementById("month");
+const yearSel = document.getElementById("year");
+const names = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+names.forEach((n,i) => { const o = document.createElement("option"); o.value = i+1; o.textContent = n; monthSel.appendChild(o); });
+const now = new Date();
+monthSel.value = now.getMonth() + 1;
+for (let y = now.getFullYear() - 2; y <= now.getFullYear() + 1; y++) {
+  const o = document.createElement("option"); o.value = y; o.textContent = y; yearSel.appendChild(o);
+}
+yearSel.value = now.getFullYear();
+
+let currentRunId = null;
+
+async function loadRunList() {
+  const res = await fetch(`${API}/hr/payroll/run/list`);
+  const rows = await res.json();
+  const box = document.getElementById("runList");
+  box.innerHTML = "";
+  rows.forEach(r => {
+    const div = document.createElement("div");
+    div.innerHTML = `${names[r.month-1]} ${r.year} <span class="status status-${r.status}">${r.status}</span>`;
+    div.onclick = () => openRun(r.id);
+    box.appendChild(div);
+  });
+}
+
+async function createRun() {
+  const msg = document.getElementById("statusMsg");
+  const res = await fetch(`${API}/hr/payroll/run/create`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ month: monthSel.value, year: yearSel.value })
+  });
+  const data = await res.json();
+  if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error; return; }
+  msg.style.color = "#070";
+  msg.textContent = `Draft ready — ${data.employees_processed} employee(s) computed.`;
+  loadRunList();
+  openRun(data.run_id);
+}
+
+async function openRun(id) {
+  currentRunId = id;
+  const res = await fetch(`${API}/hr/payroll/run/${id}`);
+  const data = await res.json();
+  renderRun(data);
+}
+
+function renderRun(data) {
+  const { run, details, totals } = data;
+  const editable = run.status === "DRAFT";
+  let html = `<div class="run-header">
+    <div class="title">${names[run.month-1]} ${run.year} — <span class="status-${run.status}">${run.status}</span></div>
+    <div class="actions">`;
+  if (editable) html += `<button onclick="processRun()">Process (Post to Ledger)</button><button onclick="cancelRun()">Cancel Draft</button>`;
+  if (run.status === "PROCESSED") html += `<button onclick="markPaid()">Mark as Paid (Bank Transfer)</button>`;
+  html += `</div></div>`;
+
+  if (run.journal_voucher_no) html += `<div class="note">Salary journal voucher: <b>${run.journal_voucher_no}</b></div>`;
+  if (run.payment_voucher_no) html += `<div class="note">Payment voucher: <b>${run.payment_voucher_no}</b></div>`;
+
+  html += `<table><thead><tr>
+    <th>Employee</th><th>Gross</th><th>PF (Emp)</th><th>ESI (Emp)</th><th>PT</th><th>TDS</th><th>Loan</th><th>Other Ded.</th><th>Net Pay</th><th></th>
+  </tr></thead><tbody>`;
+
+  details.forEach(d => {
+    html += `<tr>
+      <td>${d.full_name}</td>
+      <td>₹${d.gross_earnings.toFixed(2)}</td>
+      <td>₹${d.pf_employee.toFixed(2)}</td>
+      <td>₹${d.esi_employee.toFixed(2)}</td>
+      <td>₹${d.pt.toFixed(2)}</td>
+      <td>${editable ? `<input type="number" id="tds-${d.id}" value="${d.tds}">` : "₹" + d.tds.toFixed(2)}</td>
+      <td>₹${d.loan_deduction.toFixed(2)}</td>
+      <td>${editable ? `<input type="number" id="other-${d.id}" value="${d.other_deductions}">` : "₹" + d.other_deductions.toFixed(2)}</td>
+      <td>₹${d.net_pay.toFixed(2)}</td>
+      <td>
+        ${editable ? `<button onclick="recalc(${d.id})">Update</button>` : `<a href="${API}/hr/payslip/${run.id}/${d.employee_id}" target="_blank">Payslip</a>`}
+      </td>
+    </tr>`;
+  });
+
+  html += `<tr class="totals-row">
+    <td>TOTAL</td>
+    <td>₹${totals.gross.toFixed(2)}</td>
+    <td>₹${totals.pf_employee.toFixed(2)}</td>
+    <td>₹${totals.esi_employee.toFixed(2)}</td>
+    <td>₹${totals.pt.toFixed(2)}</td>
+    <td>₹${totals.tds.toFixed(2)}</td>
+    <td>₹${totals.loan.toFixed(2)}</td>
+    <td>₹${totals.other.toFixed(2)}</td>
+    <td>₹${totals.net.toFixed(2)}</td>
+    <td></td>
+  </tr></tbody></table>`;
+
+  html += `<div class="note">TDS is a simplified new-regime estimate and PF/ESI/PT use configured rates — review before processing. Editable fields only apply while the run is DRAFT.</div>`;
+
+  document.getElementById("runDetail").innerHTML = html;
+}
+
+async function recalc(detailId) {
+  const tds = document.getElementById(`tds-${detailId}`).value;
+  const other = document.getElementById(`other-${detailId}`).value;
+  await fetch(`${API}/hr/payroll/run/${currentRunId}/detail/${detailId}`, {
+    method: "PUT", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ tds: Number(tds), other_deductions: Number(other) })
+  });
+  openRun(currentRunId);
+}
+
+async function processRun() {
+  if (!confirm("Process this run? This posts a journal voucher and locks the draft for editing.")) return;
+  const res = await fetch(`${API}/hr/payroll/run/${currentRunId}/process`, { method: "POST" });
+  const data = await res.json();
+  const msg = document.getElementById("statusMsg");
+  if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error; return; }
+  msg.style.color = "#070"; msg.textContent = `Processed. Journal voucher ${data.voucher_no} posted.`;
+  loadRunList();
+  openRun(currentRunId);
+}
+
+async function markPaid() {
+  const bankLedger = prompt("Pay from which ledger?", "Bank A/c") || "Bank A/c";
+  const res = await fetch(`${API}/hr/payroll/run/${currentRunId}/mark-paid`, {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ bankLedger })
+  });
+  const data = await res.json();
+  const msg = document.getElementById("statusMsg");
+  if (!res.ok) { msg.style.color = "#a00"; msg.textContent = data.error; return; }
+  msg.style.color = "#070"; msg.textContent = `Paid. Payment voucher ${data.voucher_no} posted for ₹${data.amount.toFixed(2)}.`;
+  loadRunList();
+  openRun(currentRunId);
+}
+
+async function cancelRun() {
+  if (!confirm("Cancel and delete this draft run?")) return;
+  await fetch(`${API}/hr/payroll/run/${currentRunId}/cancel`, { method: "POST" });
+  document.getElementById("runDetail").innerHTML = "Select or create a payroll run to begin.";
+  loadRunList();
+}
+
+loadRunList();
+</script>
+</body>
+</html>

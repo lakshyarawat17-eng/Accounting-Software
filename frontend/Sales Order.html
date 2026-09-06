@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<title>Sales Order</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-icon.svg" />
+
+<style>
+@page { margin: 20mm; }
+
+body {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+}
+
+.title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.section-box {
+  border: 1px solid black;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 6px;
+  text-decoration: underline;
+}
+
+label {
+  margin-right: 15px;
+}
+
+input, select {
+  padding: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th, td {
+  border: 1px solid black;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
+}
+
+.center { text-align: center; }
+.amount { text-align: right; }
+
+#suggestions, #clientSuggestions {
+  border: 1px solid #aaa;
+  max-height: 150px;
+  overflow-y: auto;
+  position: absolute;
+  background: white;
+  z-index: 10;
+  width: 260px;
+  display: none;
+}
+#suggestions div, #clientSuggestions div {
+  padding: 6px;
+  cursor: pointer;
+}
+#suggestions div:hover, #clientSuggestions div:hover {
+  background: #eee;
+}
+
+.totals-box {
+  margin-top: 10px;
+  text-align: right;
+}
+.totals-box div {
+  margin: 2px 0;
+}
+.totals-box .grand {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+</style>
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+
+<body>
+
+<a class="back-link" href="Main Menu.html">⬅ Main Menu</a>
+<div class="title">Sales Order</div>
+
+<!-- 1️⃣ SO HEADER -->
+<div class="section-box">
+  <div class="section-title">Order Details</div>
+
+  <label>SO No:
+    <input type="text" id="soNo" readonly style="background:#eee;">
+  </label>
+
+  <label>Date:
+    <input type="date" id="soDate">
+  </label>
+
+  <label style="position:relative;">Customer:
+    <input type="text" id="customer" placeholder="Search or type customer name" autocomplete="off">
+    <div id="clientSuggestions"></div>
+  </label>
+
+  <label>Sale Type:
+    <select id="taxType">
+      <option value="INTRA">Same State (CGST + SGST)</option>
+      <option value="INTER">Different State (IGST)</option>
+    </select>
+  </label>
+
+  <div id="clientInfoLine" style="margin-top:8px; font-size:12px; color:#555;"></div>
+
+  <br><br>
+  <label style="margin-right:0;">Narration:
+    <input type="text" id="narration" placeholder="Optional note" style="width:400px;">
+  </label>
+</div>
+
+<!-- 2️⃣ ADD ITEM -->
+<div class="section-box">
+  <div class="section-title">Add Item</div>
+
+  <label>Item:
+    <input type="text" id="itemSearch" placeholder="Search item">
+    <div id="suggestions"></div>
+  </label>
+
+  <label>Qty:
+    <input type="number" id="itemQty" value="1">
+  </label>
+
+  <label>Rate ₹:
+    <input type="number" id="itemRate" step="0.01">
+  </label>
+
+  <label>GST Rate:
+    <select id="itemGstRate">
+      <option value="0">0%</option>
+      <option value="0.25">0.25%</option>
+      <option value="3">3%</option>
+      <option value="5">5%</option>
+      <option value="12">12%</option>
+      <option value="18" selected>18%</option>
+      <option value="28">28%</option>
+    </select>
+  </label>
+
+  <button onclick="addItem()">Add Item</button>
+</div>
+
+<!-- 3️⃣ ITEMS LIST -->
+<div class="section-box">
+  <div class="section-title">Items Ordered</div>
+
+  <table id="itemsTable">
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  </table>
+
+  <div class="totals-box" id="totalsBox"></div>
+</div>
+
+<!-- 4️⃣ SAVE -->
+<div class="section-box">
+  <button onclick="saveSO()">Save Sales Order</button>
+</div>
+
+<script>
+let items = [];
+let selectedItem = null;
+let selectedClientId = null; // null = free-typed customer name, no client record linked yet
+
+const itemSearch = document.getElementById("itemSearch");
+const suggestionsBox = document.getElementById("suggestions");
+const itemGstRate = document.getElementById("itemGstRate");
+const taxTypeSelect = document.getElementById("taxType");
+const itemsTable = document.getElementById("itemsTable");
+
+const customerInput = document.getElementById("customer");
+const clientSuggestions = document.getElementById("clientSuggestions");
+const clientInfoLine = document.getElementById("clientInfoLine");
+
+/* Prefill the next SO number and today's date */
+window.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("soDate").value = new Date().toISOString().slice(0, 10);
+  try {
+    const res = await fetch(API_BASE_URL + "/so/next-number");
+    const data = await res.json();
+    if (data.soNo) document.getElementById("soNo").value = data.soNo;
+  } catch (e) {
+    // Non-fatal — the backend assigns the real number on save either way.
+  }
+});
+
+/* 🔍 CLIENT AUTOCOMPLETE (matches Sales Book behaviour) */
+customerInput.addEventListener("input", async () => {
+  selectedClientId = null;
+  clientInfoLine.textContent = "";
+  clientSuggestions.innerHTML = "";
+  clientSuggestions.style.display = "none";
+
+  const q = customerInput.value.trim();
+  if (q.length < 1) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/clients/search?q=${encodeURIComponent(q)}`);
+    const list = await res.json();
+    if (!list.length) return;
+
+    list.forEach(client => {
+      const div = document.createElement("div");
+      div.textContent = client.email ? `${client.name} — ${client.email}` : client.name;
+      div.onclick = () => {
+        customerInput.value = client.name;
+        selectedClientId = client.id;
+        clientInfoLine.textContent = [client.email, client.phone].filter(Boolean).join(" | ") || "";
+        clientSuggestions.innerHTML = "";
+        clientSuggestions.style.display = "none";
+      };
+      clientSuggestions.appendChild(div);
+    });
+
+    clientSuggestions.style.display = "block";
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+/* 🔍 ITEM AUTOCOMPLETE */
+itemSearch.addEventListener("input", async () => {
+  selectedItem = null;
+  const q = itemSearch.value.trim();
+
+  if (q.length < 2) {
+    suggestionsBox.innerHTML = "";
+    suggestionsBox.style.display = "none";
+    return;
+  }
+
+  const res = await fetch(API_BASE_URL + `/items/search?q=${encodeURIComponent(q)}`);
+  const list = await res.json();
+
+  suggestionsBox.innerHTML = "";
+  list.forEach(item => {
+    const div = document.createElement("div");
+    div.textContent = `${item.item_name} (₹${item.selling_price})`;
+
+    div.onclick = () => {
+      selectedItem = item;
+      itemSearch.value = item.item_name;
+      itemRate.value = item.selling_price || "";
+      if (item.gst_rate !== null && item.gst_rate !== undefined) {
+        const match = [...itemGstRate.options].find(
+          o => Number(o.value) === Number(item.gst_rate)
+        );
+        if (match) itemGstRate.value = match.value;
+      }
+      suggestionsBox.innerHTML = "";
+      suggestionsBox.style.display = "none";
+    };
+
+    suggestionsBox.appendChild(div);
+  });
+
+  suggestionsBox.style.display = list.length ? "block" : "none";
+});
+
+/* ➕ ADD ITEM */
+function addItem() {
+  const name = itemSearch.value.trim();
+  const qty = Number(itemQty.value);
+  const rate = Number(itemRate.value);
+  const gstRate = Number(itemGstRate.value);
+
+  if (!name) {
+    alert("Item name required");
+    return;
+  }
+  if (qty <= 0 || rate <= 0) {
+    alert("Invalid qty or rate");
+    return;
+  }
+
+  const amount = qty * rate;
+  const gstAmount = amount * (gstRate / 100);
+
+  items.push({
+    item_id: selectedItem ? selectedItem.id : null,
+    item_name: name,
+    qty,
+    rate,
+    amount,
+    gst_rate: gstRate,
+    gst_amount: gstAmount
+  });
+
+  renderItems();
+
+  selectedItem = null;
+  itemSearch.value = "";
+  itemQty.value = 1;
+  itemRate.value = "";
+  itemGstRate.value = "18";
+}
+
+function removeItem(idx) {
+  items.splice(idx, 1);
+  renderItems();
+}
+
+function renderItems() {
+  itemsTable.innerHTML = `
+    <tr>
+      <th>Item</th>
+      <th>Qty</th>
+      <th>Rate</th>
+      <th>Amount</th>
+      <th>GST %</th>
+      <th>GST Amt</th>
+      <th>Total</th>
+      <th></th>
+    </tr>
+  `;
+
+  items.forEach((it, idx) => {
+    const row = itemsTable.insertRow();
+    row.innerHTML = `
+      <td>${it.item_name}</td>
+      <td class="center">${it.qty}</td>
+      <td class="amount">${it.rate.toFixed(2)}</td>
+      <td class="amount">${it.amount.toFixed(2)}</td>
+      <td class="center">${it.gst_rate}%</td>
+      <td class="amount">${it.gst_amount.toFixed(2)}</td>
+      <td class="amount">${(it.amount + it.gst_amount).toFixed(2)}</td>
+      <td class="center"><button onclick="removeItem(${idx})">✕</button></td>
+    `;
+  });
+
+  renderTotals();
+}
+
+/* 🧮 RUNNING TOTALS */
+function renderTotals() {
+  const totalsBox = document.getElementById("totalsBox");
+
+  if (items.length === 0) {
+    totalsBox.innerHTML = "";
+    return;
+  }
+
+  const taxable = items.reduce((s, i) => s + i.amount, 0);
+  const totalGst = items.reduce((s, i) => s + i.gst_amount, 0);
+  const isInter = taxTypeSelect.value === "INTER";
+
+  const igst = isInter ? totalGst : 0;
+  const cgst = isInter ? 0 : totalGst / 2;
+  const sgst = isInter ? 0 : totalGst / 2;
+  const grandTotal = taxable + totalGst;
+
+  totalsBox.innerHTML = `
+    <div>Taxable Amount: ₹${taxable.toFixed(2)}</div>
+    ${isInter
+      ? `<div>IGST: ₹${igst.toFixed(2)}</div>`
+      : `<div>CGST: ₹${cgst.toFixed(2)}</div><div>SGST: ₹${sgst.toFixed(2)}</div>`
+    }
+    <div class="grand">Grand Total: ₹${grandTotal.toFixed(2)}</div>
+  `;
+}
+
+taxTypeSelect.addEventListener("change", renderTotals);
+
+/* 💾 SAVE SALES ORDER */
+function saveSO() {
+  const date = document.getElementById("soDate").value;
+  const customerEl = document.getElementById("customer");
+  const customer = customerEl.value.trim();
+  const narrationEl = document.getElementById("narration");
+  const taxType = taxTypeSelect.value;
+
+  if (!date || !customer) {
+    alert("Date and customer required");
+    return;
+  }
+
+  if (items.length === 0) {
+    alert("Add at least one item");
+    return;
+  }
+
+  fetch(API_BASE_URL + "/so/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date,
+      customer,
+      clientId: selectedClientId,
+      taxType,
+      narration: narrationEl.value.trim() || null,
+      items
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    alert(`Sales Order ${data.so_no} saved successfully`);
+    window.location.href = "Sales Order Register.html";
+  })
+  .catch(() => alert("Error saving sales order"));
+}
+</script>
+
+</body>
+</html>
