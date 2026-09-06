@@ -12,7 +12,7 @@
 // (Do not include a trailing slash.)
 // ============================================================
 
-const RAILWAY_BACKEND_URL = "https://your-app-name.up.railway.app";
+const RAILWAY_BACKEND_URL = "https://accounting-software-production-7434.up.railway.app";
 
 window.API_BASE_URL = (function () {
   const host = window.location.hostname;
